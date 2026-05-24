@@ -64,7 +64,7 @@ Original:  AI → MCP Server → spawn godot process → parse stdout → return
 This fork: AI → MCP Server → WebSocket → Godot Plugin (running inside editor) → real-time response
 ```
 
-The Godot plugin (`addons/godot_mcp/`) runs a WebSocket server on port 6789 inside the Godot editor. The MCP server communicates with the live editor session, enabling real-time scene manipulation, live resource queries, and persistent state — none of which are possible with subprocess invocation.
+The Godot plugin (`addons/godot_mcp/`) runs a WebSocket server on port 9080 inside the Godot editor. The MCP server communicates with the live editor session, enabling real-time scene manipulation, live resource queries, and persistent state — none of which are possible with subprocess invocation.
 
 ---
 
@@ -216,6 +216,7 @@ Config file locations:
 | **Tween** | animate_node_property, create_tween_script, create_animation_from_tween |
 | **Path** | configure_path_follow, add/remove/set_path_point, get_path_info, clear_path |
 | **Playback** | play_animation, stop_animation, get_play_status |
+| **System Info** | get_application_info, get_godot_info, get_aseprite_info, get_system_info, resolve_application_path |
 
 ### Godot-MCP — 10+ Resource Endpoints
 
@@ -231,6 +232,7 @@ Real-time data queried from the live Godot editor session:
 |---|---|
 | **Canvas** | create_canvas, add_layer, add_frame |
 | **Drawing** | draw_pixels, draw_line, draw_rectangle, draw_circle, fill_area, erase_area |
+| **System Info** | get_app_info, get_aseprite_info, get_godot_info, get_system_info, resolve_application_path |
 | **Drawing Advanced** | draw_polygon, draw_bezier_curve, draw_gradient, draw_pattern, draw_text, apply_brush_stroke |
 | **Layer** | (basic layer management from original) |
 | **Layer Advanced** | create_layer_group, copy/rename_layer, toggle_visibility, move_to_group, merge_layers, set_blend_mode/opacity |

@@ -48,7 +48,7 @@ Claude / AI Client
        │  MCP (stdio)
        ▼
   Node.js MCP Server (server/src/)
-       │  WebSocket (port 6789)
+       │  WebSocket (port 9080)
        ▼
   Godot Plugin (addons/godot_mcp/)
        │  GDScript
@@ -172,7 +172,7 @@ Set up a WorldEnvironment with a procedural sky and ambient light.
 
 ## Troubleshooting
 
-**WebSocket connection refused** — Make sure the Godot project is open in the editor with the plugin enabled. The plugin starts the WebSocket server on port 6789.
+**WebSocket connection refused** — Make sure the Godot project is open in the editor with the plugin enabled. The plugin starts the WebSocket server on port 9080.
 
 **Plugin not showing** — Reload the Godot project after copying the `addons/godot_mcp/` folder. Verify it appears in **Project Settings → Plugins**.
 

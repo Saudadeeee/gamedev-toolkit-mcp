@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Godot x Aseprite MCP — Setup Script (Linux / macOS)
+# Godot x Aseprite MCP - Setup Script (Linux / macOS)
 # =============================================================================
 set -e
 
@@ -18,9 +18,7 @@ warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 fail() { echo -e "${RED}[FAIL]${NC} $1"; exit 1; }
 info() { echo -e "${BOLD}$1${NC}"; }
 
-# =============================================================================
 info "\n=== Godot x Aseprite MCP Setup ===\n"
-# =============================================================================
 
 # ---- Check prerequisites ----------------------------------------------------
 
@@ -28,28 +26,26 @@ info "Checking prerequisites..."
 
 check_cmd() {
     if command -v "$1" &>/dev/null; then
-        ok "$1 found: $(command -v $1)"
+        ok "$1 found: $(command -v "$1")"
     else
-        warn "$1 not found — $2"
+        warn "$1 not found - $2"
     fi
 }
 
-check_cmd python3     "Install from https://python.org (3.12+ required)"
-check_cmd uv          "Install with: curl -LsSf https://astral.sh/uv/install.sh | sh"
-check_cmd node        "Install from https://nodejs.org (18+ required)"
-check_cmd npm         "Comes with Node.js"
+check_cmd python3 "Install from https://python.org (3.12+ required)"
+check_cmd uv "Install with: curl -LsSf https://astral.sh/uv/install.sh | sh"
+check_cmd node "Install from https://nodejs.org (18+ required)"
+check_cmd npm "Comes with Node.js"
 
-# Check Python version
 PY_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "0.0")
 PY_MAJOR=$(echo "$PY_VER" | cut -d. -f1)
 PY_MINOR=$(echo "$PY_VER" | cut -d. -f2)
-if [ "$PY_MAJOR" -ge 3 ] && [ "$PY_MINOR" -ge 12 ]; then
+if [ "$PY_MAJOR" -gt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -ge 12 ]; }; then
     ok "Python $PY_VER"
 else
     warn "Python $PY_VER found but 3.12+ is required"
 fi
 
-# Check Node version
 NODE_VER=$(node --version 2>/dev/null | sed 's/v//' || echo "0")
 NODE_MAJOR=$(echo "$NODE_VER" | cut -d. -f1)
 if [ "$NODE_MAJOR" -ge 18 ]; then
@@ -110,7 +106,7 @@ if [ -z "$ASEPRITE_PATH" ]; then
     warn "Aseprite not found automatically."
     echo "    Common locations:"
     echo "      macOS: /Applications/Aseprite.app/Contents/MacOS/aseprite"
-    echo "      Linux: /usr/bin/aseprite  or  ~/.local/share/Steam/steamapps/common/Aseprite/aseprite"
+    echo "      Linux: /usr/bin/aseprite or ~/.local/share/Steam/steamapps/common/Aseprite/aseprite"
     ASEPRITE_PATH="/path/to/aseprite"
 fi
 
@@ -137,6 +133,7 @@ cat > "$CONFIG_OUT" <<EOF
     "aseprite": {
       "command": "$ASEPRITE_CMD",
       "args": $ASEPRITE_ARGS,
+      "cwd": "$ASEPRITE_MCP_DIR",
       "env": {
         "ASEPRITE_PATH": "$ASEPRITE_PATH"
       }
@@ -161,16 +158,16 @@ echo ""
 info "=== Setup Complete ===\n"
 echo "Next steps:"
 echo ""
-echo "  1. Copy mcp_config.json to your Claude config location:"
+echo "  1. Copy or merge mcp_config.json into your Claude config location:"
 echo "       macOS: ~/Library/Application Support/Claude/claude_desktop_config.json"
 echo "       Linux: ~/.config/Claude/claude_desktop_config.json"
 echo ""
 echo "  2. Open your Godot project in the Godot editor."
 echo "       Copy addons/godot_mcp/ to your project and enable the plugin:"
-echo "       Project → Project Settings → Plugins → Godot MCP → Enable"
+echo "       Project -> Project Settings -> Plugins -> Godot MCP -> Enable"
 echo ""
 echo "  3. Restart Claude Desktop (or reload the MCP config in Claude Code)."
 echo ""
 if [ "$ASEPRITE_PATH" = "/path/to/aseprite" ]; then
-    warn "Remember to update ASEPRITE_PATH in mcp_config.json with the real path!"
+    warn "Remember to update ASEPRITE_PATH in mcp_config.json with the real path."
 fi

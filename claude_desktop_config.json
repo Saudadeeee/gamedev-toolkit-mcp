@@ -9,6 +9,7 @@
         "-m",
         "aseprite_mcp"
       ],
+      "cwd": "/path/to/aseprite-mcp",
       "env": {
         "ASEPRITE_PATH": "/path/to/aseprite"
       }

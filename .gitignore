@@ -120,3 +120,4 @@ logs/
 tmp/
 temp/
 .cache/
+aseprite-mcp/chessboard.lua

@@ -1,5 +1,5 @@
 # =============================================================================
-# Godot x Aseprite MCP — Setup Script (Windows PowerShell)
+# Godot x Aseprite MCP - Setup Script (Windows PowerShell)
 # =============================================================================
 $ErrorActionPreference = "Stop"
 
@@ -10,9 +10,7 @@ function Ok   { param($msg) Write-Host "[OK]   $msg" -ForegroundColor Green }
 function Warn { param($msg) Write-Host "[WARN] $msg" -ForegroundColor Yellow }
 function Info { param($msg) Write-Host "`n$msg" -ForegroundColor Cyan }
 
-# =============================================================================
 Info "=== Godot x Aseprite MCP Setup (Windows) ==="
-# =============================================================================
 
 # ---- Check prerequisites ----------------------------------------------------
 
@@ -23,7 +21,7 @@ function Check-Command {
     if (Get-Command $name -ErrorAction SilentlyContinue) {
         Ok "$name found"
     } else {
-        Warn "$name not found — $hint"
+        Warn "$name not found - $hint"
     }
 }
 
@@ -32,18 +30,20 @@ Check-Command "uv"      "Install with: winget install astral-sh.uv  OR  pip inst
 Check-Command "node"    "Install from https://nodejs.org (18+ required)"
 Check-Command "npm"     "Comes with Node.js"
 
-# Check Python version
 try {
     $PyVer = python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
     $Parts = $PyVer.Split(".")
-    if ([int]$Parts[0] -ge 3 -and [int]$Parts[1] -ge 12) {
+    $PyMajor = [int]$Parts[0]
+    $PyMinor = [int]$Parts[1]
+    if (($PyMajor -gt 3) -or (($PyMajor -eq 3) -and ($PyMinor -ge 12))) {
         Ok "Python $PyVer"
     } else {
         Warn "Python $PyVer found but 3.12+ is required"
     }
-} catch { Warn "Could not determine Python version" }
+} catch {
+    Warn "Could not determine Python version"
+}
 
-# Check Node version
 try {
     $NodeVer = (node --version).TrimStart("v")
     $NodeMajor = [int]($NodeVer.Split(".")[0])
@@ -52,7 +52,9 @@ try {
     } else {
         Warn "Node.js v$NodeVer found but 18+ is required"
     }
-} catch { Warn "Could not determine Node.js version" }
+} catch {
+    Warn "Could not determine Node.js version"
+}
 
 # ---- Aseprite MCP -----------------------------------------------------------
 
@@ -104,7 +106,6 @@ foreach ($c in $Candidates) {
 }
 
 if (-not $AsepriteExe) {
-    # Try registry
     try {
         $reg = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*" |
                Where-Object { $_.DisplayName -like "*Aseprite*" } |
@@ -148,6 +149,7 @@ $Config = @"
     "aseprite": {
       "command": "$AsepCmd",
       "args": $AsepArgs,
+      "cwd": "$AsepriteMcpDir",
       "env": {
         "ASEPRITE_PATH": "$AsepriteExeJson"
       }
@@ -171,7 +173,7 @@ Ok "Config written to: $ConfigOut"
 Info "=== Setup Complete ===`n"
 Write-Host "Next steps:"
 Write-Host ""
-Write-Host "  1. Copy mcp_config.json to your Claude config location:"
+Write-Host "  1. Copy or merge mcp_config.json into your Claude config location:"
 Write-Host "       $env:APPDATA\Claude\claude_desktop_config.json"
 Write-Host ""
 Write-Host "  2. Open your Godot project in the Godot editor."
@@ -182,5 +184,5 @@ Write-Host "  3. Restart Claude Desktop (or reload MCP config in Claude Code)."
 Write-Host ""
 
 if ($AsepriteExe -eq "C:\\path\\to\\Aseprite.exe") {
-    Warn "Remember to update ASEPRITE_PATH in mcp_config.json with the real Aseprite path!"
+    Warn "Remember to update ASEPRITE_PATH in mcp_config.json with the real Aseprite path."
 }

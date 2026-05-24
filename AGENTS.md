@@ -172,7 +172,7 @@ Aseprite saves files wherever you specify. Godot expects paths in its `res://` f
 ## Error Handling
 
 - If an Aseprite export fails, check that `ASEPRITE_PATH` is set correctly and Aseprite supports `--batch` mode.
-- If a Godot command fails with "not connected", the Godot editor must be open with the plugin enabled and the WebSocket server running on port 6789.
+- If a Godot command fails with "not connected", the Godot editor must be open with the plugin enabled and the WebSocket server running on port 9080.
 - Always verify an exported file exists before referencing it in Godot.
 - If a node path is wrong in Godot, use `get_project_info()` or inspect the scene tree first.
 
