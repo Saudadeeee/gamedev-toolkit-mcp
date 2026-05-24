@@ -18,6 +18,7 @@ import { themeTools } from './tools/theme_tools.js';
 import { tweenTools } from './tools/tween_tools.js';
 import { pathTools } from './tools/path_tools.js';
 import { meshTools } from './tools/mesh_tools.js';
+import { systemInfoTools } from './tools/system_info_tools.js';
 import { getGodotConnection } from './utils/godot_connection.js';
 
 // Import resources
@@ -96,6 +97,7 @@ async function main() {
     ...tweenTools,
     ...pathTools,
     ...meshTools,
+    ...systemInfoTools,
   ].forEach(tool => {
     server.addTool(tool);
   });

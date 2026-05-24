@@ -15,3 +15,4 @@ from . import brush
 from . import slices
 from . import file_utils
 from . import ai_features
+from . import system_info

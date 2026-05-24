@@ -2,24 +2,33 @@ import subprocess
 import tempfile
 import os
 import dotenv
+from .path_resolver import get_aseprite_path
 
 dotenv.load_dotenv()
 
 class AsepriteCommand:
     """Helper class for running Aseprite commands."""
-    
+
+    @staticmethod
+    def get_aseprite_executable():
+        """Get the Aseprite executable path."""
+        env_path = os.getenv('ASEPRITE_PATH')
+        if env_path and os.path.exists(env_path):
+            return env_path
+        return get_aseprite_path() or 'aseprite'
+
     @staticmethod
     def run_command(args):
         """Run an Aseprite command with proper error handling.
-        
+
         Args:
             args: List of command arguments
-            
+
         Returns:
             tuple: (success, output) where success is a boolean and output is the command output
         """
         try:
-            cmd = [os.getenv('ASEPRITE_PATH', 'aseprite')] + args
+            cmd = [AsepriteCommand.get_aseprite_executable()] + args
             result = subprocess.run(cmd, check=True, capture_output=True, text=True)
             return True, result.stdout
         except subprocess.CalledProcessError as e:
