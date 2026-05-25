@@ -13,6 +13,12 @@ func process_command(client_id: int, command_type: String, params: Dictionary, c
 		"create_resource":
 			_create_resource(client_id, params, command_id)
 			return true
+		"load_sprite":
+			_load_sprite(client_id, params, command_id)
+			return true
+		"import_animated_sprite":
+			_import_animated_sprite(client_id, params, command_id)
+			return true
 	return false  # Command not handled
 
 func _get_editor_state(client_id: int, params: Dictionary, command_id: String) -> void:
@@ -157,4 +163,162 @@ func _create_resource(client_id: int, params: Dictionary, command_id: String) ->
 	_send_success(client_id, {
 		"resource_path": resource_path,
 		"resource_type": resource_type
+	}, command_id)
+
+func _load_sprite(client_id: int, params: Dictionary, command_id: String) -> void:
+	var node_path = params.get("node_path", "")
+	var texture_path = params.get("texture_path", "")
+
+	if node_path.is_empty():
+		return _send_error(client_id, "Node path cannot be empty", command_id)
+	if texture_path.is_empty():
+		return _send_error(client_id, "Texture path cannot be empty", command_id)
+
+	if not texture_path.begins_with("res://"):
+		texture_path = "res://" + texture_path
+
+	if not ResourceLoader.exists(texture_path):
+		return _send_error(client_id, "Texture file not found: %s" % texture_path, command_id)
+
+	var node = _get_editor_node(node_path)
+	if not node:
+		return _send_error(client_id, "Node not found: %s" % node_path, command_id)
+
+	var texture = ResourceLoader.load(texture_path)
+	if not texture:
+		return _send_error(client_id, "Failed to load texture: %s" % texture_path, command_id)
+
+	if node is Sprite2D:
+		node.texture = texture
+	elif node is TextureRect:
+		node.texture = texture
+	else:
+		return _send_error(client_id, "Node does not support direct texture assignment: %s" % node.get_class(), command_id)
+
+	_mark_scene_modified()
+	_send_success(client_id, {
+		"node_path": node_path,
+		"texture_path": texture_path
+	}, command_id)
+
+func _import_animated_sprite(client_id: int, params: Dictionary, command_id: String) -> void:
+	var node_path = params.get("node_path", "")
+	var texture_path = params.get("texture_path", "")
+	var metadata_path = params.get("metadata_path", "")
+	var animation_name = params.get("animation_name", "default")
+	var fps = params.get("fps", 12.0)
+	var autoplay = params.get("autoplay", true)
+
+	if node_path.is_empty():
+		return _send_error(client_id, "Node path cannot be empty", command_id)
+	if texture_path.is_empty():
+		return _send_error(client_id, "Texture path cannot be empty", command_id)
+	if metadata_path.is_empty():
+		return _send_error(client_id, "Metadata path cannot be empty", command_id)
+
+	if not texture_path.begins_with("res://"):
+		texture_path = "res://" + texture_path
+	if not metadata_path.begins_with("res://"):
+		metadata_path = "res://" + metadata_path
+
+	var node = _get_editor_node(node_path)
+	if not node:
+		return _send_error(client_id, "Node not found: %s" % node_path, command_id)
+	if not node is AnimatedSprite2D:
+		return _send_error(client_id, "Node is not an AnimatedSprite2D: %s" % node_path, command_id)
+
+	if not ResourceLoader.exists(texture_path):
+		return _send_error(client_id, "Texture file not found: %s" % texture_path, command_id)
+	if not FileAccess.file_exists(metadata_path):
+		return _send_error(client_id, "Metadata file not found: %s" % metadata_path, command_id)
+
+	var texture = ResourceLoader.load(texture_path)
+	if not texture:
+		return _send_error(client_id, "Failed to load texture: %s" % texture_path, command_id)
+
+	var file = FileAccess.open(metadata_path, FileAccess.READ)
+	if not file:
+		return _send_error(client_id, "Failed to open metadata file: %s" % metadata_path, command_id)
+
+	var json_text = file.get_as_text()
+	file.close()
+
+	var json = JSON.new()
+	var parse_result = json.parse(json_text)
+	if parse_result != OK:
+		return _send_error(client_id, "Failed to parse metadata JSON: %s" % json.get_error_message(), command_id)
+
+	var data = json.get_data()
+	if typeof(data) != TYPE_DICTIONARY:
+		return _send_error(client_id, "Metadata JSON root must be an object", command_id)
+
+	if not data.has("frames"):
+		return _send_error(client_id, "Metadata JSON missing 'frames'", command_id)
+
+	var frames_data = data["frames"]
+	var frame_entries: Array = []
+
+	if typeof(frames_data) == TYPE_ARRAY:
+		frame_entries = frames_data
+	elif typeof(frames_data) == TYPE_DICTIONARY:
+		for frame_name in frames_data.keys():
+			var entry = frames_data[frame_name]
+			if typeof(entry) == TYPE_DICTIONARY:
+				var copy = entry.duplicate(true)
+				copy["_frame_name"] = frame_name
+				frame_entries.append(copy)
+	else:
+		return _send_error(client_id, "Metadata 'frames' must be an array or object", command_id)
+
+	if frame_entries.is_empty():
+		return _send_error(client_id, "Metadata contains no frame entries", command_id)
+
+	frame_entries.sort_custom(func(a, b):
+		var a_name = str(a.get("filename", a.get("_frame_name", "")))
+		var b_name = str(b.get("filename", b.get("_frame_name", "")))
+		return a_name.naturalnocasecmp_to(b_name) < 0
+	)
+
+	var sprite_frames = SpriteFrames.new()
+	if not sprite_frames.has_animation(animation_name):
+		sprite_frames.add_animation(animation_name)
+	sprite_frames.set_animation_loop(animation_name, true)
+	sprite_frames.set_animation_speed(animation_name, float(fps))
+
+	for frame_entry in frame_entries:
+		if typeof(frame_entry) != TYPE_DICTIONARY:
+			continue
+		var rect_data = frame_entry.get("frame", null)
+		if typeof(rect_data) != TYPE_DICTIONARY:
+			continue
+
+		var x = int(rect_data.get("x", 0))
+		var y = int(rect_data.get("y", 0))
+		var w = int(rect_data.get("w", 0))
+		var h = int(rect_data.get("h", 0))
+
+		if w <= 0 or h <= 0:
+			continue
+
+		var atlas = AtlasTexture.new()
+		atlas.atlas = texture
+		atlas.region = Rect2(x, y, w, h)
+		sprite_frames.add_frame(animation_name, atlas)
+
+	var frame_count = sprite_frames.get_frame_count(animation_name)
+	if frame_count == 0:
+		return _send_error(client_id, "No valid animation frames were created from metadata", command_id)
+
+	node.sprite_frames = sprite_frames
+	node.animation = animation_name
+	node.autoplay = animation_name if autoplay else StringName()
+
+	_mark_scene_modified()
+	_send_success(client_id, {
+		"node_path": node_path,
+		"texture_path": texture_path,
+		"metadata_path": metadata_path,
+		"animation_name": animation_name,
+		"frame_count": frame_count,
+		"fps": fps
 	}, command_id)

@@ -28,7 +28,7 @@ AI reads AGENTS.md
 ```
 [Aseprite]  create_canvas → add_layer → draw_pixels → apply_effects → export_sprite_sheet
                                                                               │
-[Godot]                                              load_sprite → add_node → create_script → save_scene
+[Godot]                                              load_sprite -> create_node -> create_script -> save_scene
 ```
 
 ---
@@ -197,7 +197,7 @@ Config file locations:
 
 | Category | Tools |
 |---|---|
-| **Node** | create_node, delete_node, update_node_property, get_node_properties, list_nodes |
+| **Node** | create_node, delete_node, update_node_property, get_node_properties, list_nodes, load_sprite, import_animated_sprite |
 | **Scene** | create_scene, open_scene, save_scene, create_resource, list_filesystem_files, scan_filesystem |
 | **Script** | create_script, get_script, edit_script, create_script_template |
 | **Editor** | execute_editor_script, get_current_scene, play_main/custom/current_scene, stop_playing_scene, get_play_status |
@@ -257,7 +257,7 @@ Real-time data queried from the live Godot editor session:
 ```
 Create a 16x16 player sprite with idle and walk animations,
 export it as a spritesheet with JSON metadata, then set it up
-in Godot as a CharacterBody2D with AnimatedSprite2D and CollisionShape2D.
+in Godot as a CharacterBody2D with AnimatedSprite2D, imported SpriteFrames, and CollisionShape2D.
 ```
 
 ```

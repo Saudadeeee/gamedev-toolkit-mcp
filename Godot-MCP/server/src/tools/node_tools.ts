@@ -29,6 +29,20 @@ interface ListNodesParams {
   parent_path: string;
 }
 
+interface LoadSpriteParams {
+  node_path: string;
+  texture_path: string;
+}
+
+interface ImportAnimatedSpriteParams {
+  node_path: string;
+  texture_path: string;
+  metadata_path: string;
+  animation_name?: string;
+  fps?: number;
+  autoplay?: boolean;
+}
+
 /**
  * Definition for node tools - operations that manipulate nodes in the scene tree
  */
@@ -158,6 +172,73 @@ export const nodeTools: MCPTool[] = [
         return `Children of node at ${parent_path}:\n\n${formattedChildren}`;
       } catch (error) {
         throw new Error(`Failed to list nodes: ${(error as Error).message}`);
+      }
+    },
+  },
+
+  {
+    name: 'load_sprite',
+    description: 'Load a texture into a Sprite2D or TextureRect node',
+    parameters: z.object({
+      node_path: z.string()
+        .describe('Path to the target Sprite2D or TextureRect node'),
+      texture_path: z.string()
+        .describe('Godot resource path to the texture (e.g. "res://assets/player.png")'),
+    }),
+    execute: async ({ node_path, texture_path }: LoadSpriteParams): Promise<string> => {
+      const godot = getGodotConnection();
+
+      try {
+        await godot.sendCommand('load_sprite', {
+          node_path,
+          texture_path,
+        });
+        return `Loaded texture ${texture_path} into ${node_path}`;
+      } catch (error) {
+        throw new Error(`Failed to load sprite: ${(error as Error).message}`);
+      }
+    },
+  },
+
+  {
+    name: 'import_animated_sprite',
+    description: 'Create SpriteFrames on an AnimatedSprite2D from an Aseprite spritesheet and JSON metadata',
+    parameters: z.object({
+      node_path: z.string()
+        .describe('Path to the AnimatedSprite2D node'),
+      texture_path: z.string()
+        .describe('Godot resource path to the spritesheet texture (e.g. "res://assets/player_sheet.png")'),
+      metadata_path: z.string()
+        .describe('Godot resource path to the Aseprite JSON metadata (e.g. "res://assets/player_sheet.json")'),
+      animation_name: z.string().default('default')
+        .describe('Animation name to create inside SpriteFrames'),
+      fps: z.number().default(12)
+        .describe('Animation playback speed in frames per second'),
+      autoplay: z.boolean().default(true)
+        .describe('Whether the imported animation should autoplay'),
+    }),
+    execute: async ({
+      node_path,
+      texture_path,
+      metadata_path,
+      animation_name = 'default',
+      fps = 12,
+      autoplay = true,
+    }: ImportAnimatedSpriteParams): Promise<string> => {
+      const godot = getGodotConnection();
+
+      try {
+        const result = await godot.sendCommand<CommandResult>('import_animated_sprite', {
+          node_path,
+          texture_path,
+          metadata_path,
+          animation_name,
+          fps,
+          autoplay,
+        });
+        return `Imported ${result.frame_count} frames into ${node_path} as animation "${animation_name}"`;
+      } catch (error) {
+        throw new Error(`Failed to import animated sprite: ${(error as Error).message}`);
       }
     },
   },

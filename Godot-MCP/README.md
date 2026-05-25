@@ -110,12 +110,13 @@ Open your Godot project in the editor. The plugin connects automatically. You ca
 |---|---|
 | `get_project_info` | Project metadata and settings |
 | `list_projects` | List available Godot projects |
-| `add_node` | Create a new node in a scene |
-| `edit_node` | Modify node properties |
-| `remove_node` | Delete a node |
+| `create_node` | Create a new node in a scene |
+| `update_node_property` | Modify node properties |
+| `delete_node` | Delete a node |
 | `create_scene` | Create a new scene file |
 | `save_scene` | Save the current scene |
 | `load_sprite` | Load a sprite resource |
+| `import_animated_sprite` | Build SpriteFrames on an AnimatedSprite2D from spritesheet JSON |
 | `run_project` | Run the Godot project |
 | `stop_project` | Stop the running project |
 | `get_debug_output` | Get console/debug output |
