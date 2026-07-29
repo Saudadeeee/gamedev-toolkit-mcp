@@ -18,6 +18,9 @@ mcp_config.json
 # ============================================================
 node_modules/
 .venv/
+# scripts/ci/test_vendored.py builds a throwaway .venv-test so it never
+# re-resolves the runtime venv out from under a server.
+.venv-test/
 venv/
 env/
 __pycache__/

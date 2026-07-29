@@ -48,8 +48,8 @@ servers/godot/                                        LICENSE: MIT
   Licence file: servers/godot/LICENSE
 
   Same as above. Note that servers/godot/addons/godot_mcp/ is intended to be
-  copied into a user's Godot project -- see "Distributing the Godot addon" in
-  docs/licensing.md.
+  copied into a user's Godot project -- see "The Godot addon" under WHAT THIS
+  LICENCE ASKS OF YOU, below.
 
 --------------------------------------------------------------------------------
 servers/audacity/                                     LICENSE: Apache-2.0
@@ -84,7 +84,62 @@ servers/blockbench/                                   LICENSE: GPL-3.0
   more permissive licence.
 
 ================================================================================
+MODIFICATION STATUS
+================================================================================
+
+GPL-3.0 section 5(a) and Apache-2.0 section 4(b) both require that modified
+files carry prominent notices stating that you changed them, and when. This is
+that statement.
+
+  servers/aseprite/     MODIFIED -- extensively; a fork. See CREDITS.md.
+  servers/godot/        MODIFIED -- extensively; a fork. See CREDITS.md.
+  servers/audacity/     UNMODIFIED -- vendored verbatim from upstream.
+  servers/obsidian/     UNMODIFIED -- vendored verbatim from upstream.
+  servers/blockbench/   UNMODIFIED -- vendored verbatim from upstream.
+
+If you change a component listed UNMODIFIED above, you must:
+
+  1. Add a note at the top of each file you touch, saying what changed and when.
+  2. Set "modified": true for that server in toolkit.json.
+  3. Update this table.
+
+That is a licence requirement, not a style preference. CI checks the toolkit.json
+field exists; it cannot check that you were honest about the rest.
+
+Never remove a LICENSE file from a component directory. Retaining it *is* the
+redistribution obligation, and CI fails without it.
+
+================================================================================
+WHAT THIS LICENCE ASKS OF YOU
+================================================================================
+
+Using the toolkit:      nothing. GPL-3.0 attaches obligations when you convey
+                        (distribute) the software, not when you run or modify
+                        it privately.
+
+Its output:             yours. GPL-3.0 covers the program, not what it
+                        produces. Sprites, audio, models, GDScript written
+                        through these servers carry no obligation -- licence
+                        your game however you like.
+
+Distributing a fork:    release the complete corresponding source under
+                        GPL-3.0, keep the notices and every LICENSE file, state
+                        what you changed, and add no further restrictions.
+
+The Godot addon:        servers/godot/addons/godot_mcp/ is meant to be copied
+                        into your own Godot project, which puts GPL-3.0 files
+                        in a tree you may want to keep proprietary. It is an
+                        EditorPlugin: it runs in the editor, not in your game,
+                        and Godot does not load addons/ in an exported build.
+                        A shipped build containing none of its code conveys
+                        nothing, so no obligation arises for your game. If you
+                        do ship a build that bundles it, the obligations above
+                        apply to that code.
+
+Only servers/blockbench/ forces GPL-3.0. Remove it and its toolkit.json entry
+and the rest (MIT, MIT, Apache-2.0) would permit a permissive licence again.
+
+================================================================================
 
 CREDITS.md records what each upstream contributes in functional terms.
-docs/licensing.md explains the obligations this licence places on you and on
-anyone who redistributes this work.
+docs/setup.md covers updating a vendored component.

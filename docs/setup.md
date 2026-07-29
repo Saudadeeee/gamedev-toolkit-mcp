@@ -24,7 +24,7 @@ bugs and how an update arrives:
 | `origin` | Servers | Who fixes bugs |
 |---|---|---|
 | `first-party` | `aseprite`, `godot-mcp` | this repo |
-| `vendored` | `audacity`, `obsidian`, `blockbench` | upstream — see [vendoring.md](vendoring.md) |
+| `vendored` | `audacity`, `obsidian`, `blockbench` | upstream — see [COPYRIGHT](../COPYRIGHT) |
 
 `blockbench` is vendored for licence compliance and reference, but it runs as a
 plugin *inside* the Blockbench application; this repo does not build it.
@@ -35,7 +35,7 @@ how it is probed. The setup scripts and every script under `scripts/` read it, s
 nothing hardcodes the server list. Add a server there and the whole toolchain
 picks it up.
 
-This project is **GPL-3.0-or-later**; see [licensing.md](licensing.md).
+This project is **GPL-3.0-or-later**; see [COPYRIGHT](../COPYRIGHT).
 
 ## Quick Setup
 
@@ -361,3 +361,43 @@ npm --prefix servers/godot/server run build
 python scripts/install_vendored.py
 python scripts/write_mcp_config.py
 ```
+
+### Pulling a newer upstream into a vendored server
+
+Vendoring means upstream fixes no longer arrive on their own, and that this repo
+is the one redistributing them. Treat an update as a licensing operation as much
+as a technical one.
+
+```bash
+git clone --depth 1 <upstream-url> /tmp/upstream
+diff -ru servers/<name> /tmp/upstream --exclude=.git --exclude=.venv --exclude=.venv-test
+```
+
+Review the diff before overwriting — nothing else is tracking local changes now.
+Copy in what you want, **keep the `LICENSE` file**, then:
+
+```bash
+python scripts/install_vendored.py --force <name>
+python scripts/ci/test_vendored.py <name>      # upstream's own suite
+python scripts/write_mcp_config.py
+python scripts/verify_toolkit.py --quick
+```
+
+Record the update in [`CREDITS.md`](../CREDITS.md). If you modified anything
+rather than copying verbatim, [`COPYRIGHT`](../COPYRIGHT) has to say so — that
+is a licence requirement, not a style preference.
+
+### Running the vendored suites
+
+```bash
+python scripts/ci/test_vendored.py             # all of them
+python scripts/ci/test_vendored.py obsidian    # just one
+python scripts/ci/test_vendored.py --keep      # leave .venv-test for debugging
+```
+
+Each suite runs in a throwaway `.venv-test`, never in the runtime venv. That is
+deliberate: installing pytest into a runtime venv re-resolves it, and an
+unpinned transitive dependency moving major version breaks the server
+invisibly — which is exactly how the `audacity` server once ended up with
+`mcp` 2.0 and no `mcp.server.fastmcp`. The test environment repeats the runtime
+pins; see `install.testPackages` in `toolkit.json`.

@@ -362,13 +362,11 @@ gamedev-toolkit-mcp/
 ├── AGENTS.md                   # AI routing instructions (auto-loaded by Claude)
 ├── CREDITS.md                  # what came from where
 ├── LICENSE                     # GPL-3.0, verbatim
-├── COPYRIGHT                   # per-component copyright + licence inventory
+├── COPYRIGHT                   # per-component licence inventory, modification
+│                               #   status, and what the licence asks of you
 ├── setup.sh / setup.ps1        # one-click setup; sequences the scripts below
 │
-├── docs/
-│   ├── setup.md                # full setup guide with troubleshooting
-│   ├── licensing.md            # what GPL-3.0 means for you, and for forks
-│   └── vendoring.md            # rules for the vendored servers, how to update
+├── docs/setup.md               # setup, troubleshooting, updating a vendored server
 │
 ├── .claude/skills/             # task playbooks the assistant loads on demand
 │
@@ -405,6 +403,9 @@ gamedev-toolkit-mcp/
     ├── install_godot_plugin.py
     ├── configure_obsidian.py
     └── ci/                     # checks the GitHub workflow runs
+        ├── test_vendored.py    # the vendored servers' own upstream suites
+        ├── probe_mcp_server.mjs
+        └── gdcheck.py
 ```
 
 ### `first-party` vs `vendored`
@@ -416,12 +417,13 @@ server, which decides only **who fixes its bugs** and how an update arrives:
 |---|---|---|
 | Servers | `aseprite`, `godot-mcp` | `audacity`, `obsidian`, `blockbench` |
 | Who fixes bugs | this repo | upstream |
-| How to change it | edit it | send it upstream; see [docs/vendoring.md](./docs/vendoring.md) |
+| How to change it | edit it | send it upstream; see [docs/setup.md](./docs/setup.md#pulling-a-newer-upstream-into-a-vendored-server) |
 | Modified here | yes, extensively | no — verbatim copies |
 
 Until the GPL-3.0 relicense, the upstream servers were cloned into a gitignored
 `external/` to keep GPL code out of an MIT repo. That constraint is gone, and
-with it the two-tier layout — see [docs/licensing.md](./docs/licensing.md).
+with it the two-tier layout. [COPYRIGHT](./COPYRIGHT) records what each
+component is and whether it was modified.
 
 ---
 
@@ -475,8 +477,8 @@ What that means in practice:
   keeping the notices, and stating what you changed.
 
 Every component keeps its own copyright notice and licence file in its
-directory; [COPYRIGHT](./COPYRIGHT) is the full inventory.
-[docs/licensing.md](./docs/licensing.md) covers the details, including the Godot
-addon you copy into your own project.
+directory. [COPYRIGHT](./COPYRIGHT) is the full inventory, and covers the
+details — modification status per component, and the Godot addon you copy into
+your own project.
 
 **Maintainer:** Saudade

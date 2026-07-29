@@ -10,14 +10,14 @@
     "where the code came from, which is what decides who fixes its bugs and how",
     "an update is pulled in:",
     "  first-party  written or forked here; we own it and fix it",
-    "  vendored     copied verbatim from upstream; update via docs/licensing.md",
+    "  vendored     copied verbatim from upstream; update via docs/setup.md",
     "",
     "`runtime` says how the server is reached:",
     "  stdio        launched as a subprocess by the MCP client",
     "  in-app       a plugin running inside the application, reached over HTTP",
     "",
     "Vendoring GPL-3.0 code (Blockbench) is why this project is GPL-3.0 rather",
-    "than permissive. See docs/licensing.md and COPYRIGHT.",
+    "than permissive. See COPYRIGHT.",
     "",
     "Placeholders in client entries, resolved by scripts/write_mcp_config.py:",
     "  {path}              absolute path to the server's `path` above",
@@ -43,6 +43,7 @@
       "install": {
         "type": "uv-venv",
         "packages": ["-e", ".", "mcp>=1.1,<2"],
+        "testPackages": ["-e", ".", "mcp>=1.1,<2", "pytest", "pytest-cov"],
         "verifyImport": "mcp.server",
         "$comment": "The server's own package cannot be the import check -- importing mcp_obsidian raises unless OBSIDIAN_API_KEY is set. mcp.server is what it actually depends on (`from mcp.server import Server`) and has no import-time side effects."
       },
@@ -134,6 +135,7 @@
       "install": {
         "type": "uv-venv",
         "packages": ["-e", ".", "mcp[cli]>=1.0,<2"],
+        "testPackages": ["-e", ".[dev]", "mcp[cli]>=1.0,<2"],
         "verifyImport": "mcp.server.fastmcp",
         "$comment": "The <2 pin matters. This server imports mcp.server.fastmcp, which mcp 2.0 removed, and its own dependency is unpinned -- a fresh install picks 2.x and dies at startup with ModuleNotFoundError. verifyImport targets that exact module: any later `uv pip install` into this venv can re-resolve mcp to 2.x and silently break it again."
       },

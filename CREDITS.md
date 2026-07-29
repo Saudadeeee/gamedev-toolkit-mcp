@@ -6,9 +6,10 @@ This project is a merge and extension of several open-source MCP servers. This
 file records what came from where, so the attribution is specific rather than a
 blanket "inspired by".
 
-Two upstreams were **merged** into this repo; two more are **integrated** as
-separate MCP servers without copying their code. The licence of each is noted
-below, and the distinction matters — see the Licence section.
+Two upstreams were **merged** into this repo and heavily extended; three more
+are **vendored** — copied in verbatim, unmodified, each keeping its own licence.
+The licence of each is noted below, and the distinction matters — see the
+Licence section.
 
 ---
 
@@ -56,13 +57,12 @@ Referenced in this project's README as the architectural comparison point.
 These run alongside this repo's own two servers. Each is declared in
 [`toolkit.json`](toolkit.json) as `"origin": "vendored"` and lives under
 `servers/`, copied **verbatim** from upstream with its own `LICENSE` intact.
-None of them is modified here; see [`docs/vendoring.md`](docs/vendoring.md) for
-the rules and the update procedure, and [`COPYRIGHT`](COPYRIGHT) for the licence
-inventory.
+None of them is modified here. [`COPYRIGHT`](COPYRIGHT) holds the licence
+inventory and the rules; [`docs/setup.md`](docs/setup.md) has the procedure for
+pulling in a newer upstream.
 
-Vendoring GPL-3.0 code is why this project is GPL-3.0 rather than permissive —
-[`docs/licensing.md`](docs/licensing.md) explains the reasoning. Before the
-relicense these were cloned into a gitignored `external/` instead.
+Vendoring GPL-3.0 code is why this project is GPL-3.0 rather than permissive.
+Before the relicense these were cloned into a gitignored `external/` instead.
 
 What this repo adds on top is discovery, readiness probing, routing and
 documentation: see `aseprite_mcp/core/tool_registry.py`, `AGENTS.md`, and the
@@ -90,7 +90,7 @@ candidates in `toolkit.json` get probed. Reached here through `mcp-remote`.
 This is the component that set the project's licence. It is **GPL-3.0**, and
 GPL-3.0 code cannot be redistributed under a more permissive licence — so
 vendoring it meant relicensing the whole distribution from MIT to GPL-3.0. See
-[`docs/licensing.md`](docs/licensing.md).
+[`COPYRIGHT`](COPYRIGHT).
 
 The source is vendored for licence compliance and reference only. The server
 exists inside the Blockbench process, so this repo does not build or launch it;
@@ -107,9 +107,14 @@ skill.
 Python + FastMCP over stdio, talking to Audacity through its `mod-script-pipe`
 named pipe. 131 tools plus 9 pipelines.
 
-Not vendored because it is a thin, well-maintained bridge to Audacity's own
-scripting module — a fork would add nothing but maintenance. Requires Audacity
-3.x with `mod-script-pipe` enabled; 4.x is not supported upstream.
+Vendored verbatim, not forked: it is a thin, well-maintained bridge to
+Audacity's own scripting module, so there is nothing here worth diverging on.
+Requires Audacity 3.x with `mod-script-pipe` enabled; 4.x is not supported
+upstream.
+
+Its `mcp` dependency is unpinned upstream but must stay below 2.0 — the server
+imports `mcp.server.fastmcp`, which `mcp` 2.0 removed. `toolkit.json` carries
+that pin for both the runtime and the test environment.
 
 What this repo adds: Audacity executable detection, a readiness probe that
 checks whether the scripting pipes actually exist (the usual reason a call
@@ -181,7 +186,7 @@ Recorded so the omissions read as decisions rather than oversights.
 
 This project is **GPL-3.0-or-later**. It was MIT through commit `c5f32f4`, and
 became GPL-3.0 when the Blockbench plugin was vendored — see
-[`docs/licensing.md`](docs/licensing.md) for the reasoning and what it means for
+[`COPYRIGHT`](COPYRIGHT) for the reasoning and what it means for
 you.
 
 **Forked upstreams** (`diivi/aseprite-mcp`, `ee0pdt/Godot-MCP`) are MIT. Their

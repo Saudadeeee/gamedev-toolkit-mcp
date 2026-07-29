@@ -101,10 +101,14 @@ jobs:
           import sys
           from pathlib import Path
 
+          # Tab, LF and CR are not "stray" -- line endings are .gitattributes'
+          # job, and counting CR here would fail on any CRLF checkout. What this
+          # is looking for is the BEL that once ate "servers\aseprite".
+          allowed = {0x09, 0x0A, 0x0D}
           bad = []
           for name in ("setup.ps1", "setup.sh", "toolkit.json"):
               blob = Path(name).read_bytes()
-              found = sorted({b for b in blob if b < 9 or 11 <= b <= 31})
+              found = sorted({b for b in blob if b < 0x20 and b not in allowed})
               if found:
                   bad.append(f"{name}: {[hex(b) for b in found]}")
           if bad:
@@ -123,6 +127,26 @@ jobs:
               (Resolve-Path setup.ps1), [ref]$null, [ref]$errors) | Out-Null
           if ($errors) { $errors | ForEach-Object { $_.Message }; exit 1 }
           Write-Host "setup.ps1 parses"
+
+  vendored-servers:
+    name: vendored servers (upstream suites)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # Vendoring made this repo the redistributor of these projects, so a bad
+      # upstream update is now our bug. Their own suites are the cheapest way
+      # to notice. Each runs in a throwaway .venv-test that repeats the runtime
+      # pins -- installing pytest into the runtime venv re-resolves it, which
+      # is exactly how the audacity server got silently broken once.
+      - name: Run the vendored servers' own test suites
+        run: python3 scripts/ci/test_vendored.py
 
   aseprite-mcp:
     name: aseprite-mcp (Python)

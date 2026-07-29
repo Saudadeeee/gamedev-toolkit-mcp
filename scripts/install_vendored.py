@@ -13,7 +13,7 @@ Safe to re-run. A venv whose console script points at an interpreter that no
 longer exists -- which is what happens when the repo is moved or renamed, since
 the shims bake in absolute paths -- is rebuilt automatically.
 
-To pull a newer upstream into a vendored server, see docs/licensing.md; it is a
+To pull a newer upstream into a vendored server, see docs/setup.md; it is a
 licensing operation as much as a technical one.
 """
 
