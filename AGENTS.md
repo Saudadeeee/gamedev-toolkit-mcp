@@ -65,7 +65,7 @@ This trips up more calls than anything else:
 | `aseprite` | **No** — spawns `aseprite --batch` per call | none |
 | `godot-mcp` scene tools | **Yes** — editor open, `godot_mcp` plugin enabled | WebSocket on port 9080 |
 | `godot-mcp` headless tools | **No** — drives the binary directly | none |
-| `blockbench` | **Yes** — app open with the MCP plugin loaded | HTTP on port 3000 |
+| `blockbench` | **Yes** — app open with the MCP plugin loaded | HTTP, usually port 3000 (the plugin picks it) |
 | `audacity` | **Yes** — app open with `mod-script-pipe` enabled | Audacity 3.x only |
 | `obsidian` | **Yes** — app open with the Local REST API plugin | `OBSIDIAN_API_KEY` from that plugin |
 
@@ -294,11 +294,19 @@ Aseprite saves files wherever you specify. Godot expects `res://` paths for inte
 
 ## Setup Checklist
 
+Run `python scripts/verify_toolkit.py --quick` rather than checking these by
+hand — it probes every one of them and prints what is still missing.
+
+- [ ] Python 3.12+, `uv`, Node.js 18+, and `git` installed
+- [ ] `uv sync --directory servers/aseprite` completed
+- [ ] `npm --prefix servers/godot/server run build` completed
+- [ ] `python scripts/install_vendored.py` completed (venvs for the vendored servers)
+- [ ] `python scripts/write_mcp_config.py` completed (writes `mcp_config.json`)
 - [ ] Aseprite installed and `ASEPRITE_PATH` configured
-- [ ] Python 3.12+ and `uv` installed
-- [ ] `cd servers/aseprite && uv sync` completed
-- [ ] Node.js 18+ installed
-- [ ] `cd servers/godot/server && npm install && npm run build` completed
-- [ ] Godot 4.x installed
-- [ ] Godot project open in editor with `godot_mcp` plugin enabled
-- [ ] Both MCP servers registered in Claude config
+- [ ] Godot 4.x installed, project open in the editor with `godot_mcp` enabled
+- [ ] `OBSIDIAN_API_KEY` set — `python scripts/configure_obsidian.py`
+- [ ] All five servers registered in the MCP client config
+
+Which servers exist and how each is installed comes from
+[`toolkit.json`](toolkit.json). Nothing else hardcodes that list — if a server
+is missing everywhere, that file is the place to look.

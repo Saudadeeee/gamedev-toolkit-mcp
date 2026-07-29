@@ -7,6 +7,116 @@ on:
     branches: [master, main]
 
 jobs:
+  toolkit:
+    name: toolkit registry + setup scripts
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # toolkit.json is what setup.sh, setup.ps1 and every script under
+      # scripts/ read to learn which servers exist. A typo here breaks setup on
+      # a fresh clone, where nobody is watching.
+      - name: Validate toolkit.json
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          from pathlib import Path
+
+          registry = json.loads(Path("toolkit.json").read_text(encoding="utf-8"))
+          servers = registry.get("servers") or {}
+          if not servers:
+              sys.exit("toolkit.json declares no servers")
+
+          origins = {"first-party", "vendored"}
+          runtimes = {"stdio", "in-app"}
+          for name, spec in servers.items():
+              origin = spec.get("origin")
+              if origin not in origins:
+                  sys.exit(f"{name}: origin {origin!r} is not one of {sorted(origins)}")
+              if spec.get("runtime") not in runtimes:
+                  sys.exit(f"{name}: runtime {spec.get('runtime')!r} is not one of {sorted(runtimes)}")
+              if not (spec.get("client") or {}).get("command"):
+                  sys.exit(f"{name}: no client.command")
+              # Every server is in-tree now, so every one needs a real path.
+              path = spec.get("path")
+              if not path or not Path(path).is_dir():
+                  sys.exit(f"{name}: path {path!r} does not exist")
+              # Licence bookkeeping is a redistribution obligation, not a nicety.
+              if not spec.get("license"):
+                  sys.exit(f"{name}: no license recorded -- see COPYRIGHT")
+              if origin == "vendored":
+                  if not spec.get("repo"):
+                      sys.exit(f"{name}: vendored servers must record their upstream repo")
+                  if not (Path(path) / "LICENSE").is_file():
+                      sys.exit(f"{name}: vendored server is missing its LICENSE file")
+                  if spec.get("modified") is None:
+                      sys.exit(f"{name}: vendored servers must declare `modified`")
+          print(f"{len(servers)} servers declared, all well-formed")
+          PY
+
+      - name: Scripts import cleanly
+        run: |
+          for module in _toolkit _mcp_probe install_vendored write_mcp_config verify_toolkit; do
+            python3 -c "import sys; sys.path.insert(0, 'scripts'); import $module" || exit 1
+          done
+          echo "all scripts import"
+
+      - name: Config generator produces every server
+        run: |
+          python3 scripts/write_mcp_config.py --print > /tmp/config.json
+          python3 - <<'PY'
+          import json, sys
+          from pathlib import Path
+
+          # --print writes a status banner before the document; take the JSON.
+          text = Path("/tmp/config.json").read_text(encoding="utf-8")
+          document = json.loads(text[text.index("{"):])
+          declared = set(json.loads(Path("toolkit.json").read_text(encoding="utf-8"))["servers"])
+          written = set(document["mcpServers"])
+
+          # Nothing is installed on a fresh runner, so upstream servers are
+          # expected to be skipped. The ones needing no install are not.
+          always = {"aseprite", "godot-mcp", "blockbench"}
+          missing = always - written
+          if missing:
+              sys.exit(f"config generator dropped: {sorted(missing)}")
+          print(f"{len(written)}/{len(declared)} servers configured on a bare runner")
+          PY
+
+      # setup.ps1 once shipped with a literal BEL byte where "servers\aseprite"
+      # should have been, because a layer between the author and the file
+      # interpreted the \a. It broke every Windows setup and was invisible in a
+      # diff. This is the guard.
+      - name: No stray control bytes in the setup scripts
+        run: |
+          python3 - <<'PY'
+          import sys
+          from pathlib import Path
+
+          bad = []
+          for name in ("setup.ps1", "setup.sh", "toolkit.json"):
+              blob = Path(name).read_bytes()
+              found = sorted({b for b in blob if b < 9 or 11 <= b <= 31})
+              if found:
+                  bad.append(f"{name}: {[hex(b) for b in found]}")
+          if bad:
+              sys.exit("control bytes found -- " + "; ".join(bad))
+          print("setup scripts are clean")
+          PY
+
+      - name: Shell syntax
+        run: bash -n setup.sh
+
+      - name: PowerShell syntax
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path setup.ps1), [ref]$null, [ref]$errors) | Out-Null
+          if ($errors) { $errors | ForEach-Object { $_.Message }; exit 1 }
+          Write-Host "setup.ps1 parses"
+
   aseprite-mcp:
     name: aseprite-mcp (Python)
     runs-on: ubuntu-latest
@@ -109,7 +219,7 @@ jobs:
 
       - name: Verify the server completes an MCP handshake
         working-directory: servers/godot/server
-        run: node ../../scripts/ci/probe_mcp_server.mjs dist/index.js
+        run: node "$GITHUB_WORKSPACE/scripts/ci/probe_mcp_server.mjs" dist/index.js
 
       # Godot itself is not installed here, so the plugin cannot be executed.
       # This catches the structural mistakes that are otherwise invisible

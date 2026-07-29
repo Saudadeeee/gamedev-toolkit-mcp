@@ -3,7 +3,10 @@ name = "aseprite-mcp"
 version = "1.0.0"
 description = "MCP server for Aseprite — programmatic control of pixel art creation, animation, and game asset workflows via Lua script injection"
 readme = "README.md"
-license = { text = "MIT" }
+# Distributed as part of GameDev Toolkit MCP, which is GPL-3.0-or-later. The
+# MIT grant on the upstream work this forked is not revoked -- see ../../COPYRIGHT
+# and this directory's LICENSE.
+license = { text = "GPL-3.0-or-later" }
 requires-python = ">=3.12"
 keywords = ["mcp", "aseprite", "pixel-art", "game-dev", "automation"]
 authors = [

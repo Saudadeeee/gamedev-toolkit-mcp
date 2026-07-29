@@ -1,0 +1,167 @@
+{
+  "$comment": [
+    "The single source of truth for which MCP servers this toolkit ships and how",
+    "each one is installed, configured and probed. setup.sh, setup.ps1,",
+    "scripts/install_vendored.py, scripts/write_mcp_config.py and",
+    "scripts/verify_toolkit.py all read this file -- add a server here and every",
+    "one of them picks it up. Nothing else hardcodes the list.",
+    "",
+    "Every server now lives under servers/ and is tracked in git. `origin` says",
+    "where the code came from, which is what decides who fixes its bugs and how",
+    "an update is pulled in:",
+    "  first-party  written or forked here; we own it and fix it",
+    "  vendored     copied verbatim from upstream; update via docs/licensing.md",
+    "",
+    "`runtime` says how the server is reached:",
+    "  stdio        launched as a subprocess by the MCP client",
+    "  in-app       a plugin running inside the application, reached over HTTP",
+    "",
+    "Vendoring GPL-3.0 code (Blockbench) is why this project is GPL-3.0 rather",
+    "than permissive. See docs/licensing.md and COPYRIGHT.",
+    "",
+    "Placeholders in client entries, resolved by scripts/write_mcp_config.py:",
+    "  {path}              absolute path to the server's `path` above",
+    "  {venvScript:NAME}   the console script NAME inside that server's .venv",
+    "  {app:KEY}           absolute path to a detected application",
+    "  {port}              bridge.port, after probing bridge.portCandidates"
+  ],
+
+  "name": "gamedev-toolkit-mcp",
+  "license": "GPL-3.0-or-later",
+  "serversDir": "servers",
+
+  "servers": {
+    "obsidian": {
+      "origin": "vendored",
+      "runtime": "stdio",
+      "drives": "Obsidian",
+      "owns": "Design docs, task lists, notes -- planning before building",
+      "license": "MIT",
+      "repo": "https://github.com/MarkusPfundstein/mcp-obsidian",
+      "modified": false,
+      "path": "servers/obsidian",
+      "install": {
+        "type": "uv-venv",
+        "packages": ["-e", ".", "mcp>=1.1,<2"]
+      },
+      "client": {
+        "command": "{venvScript:mcp-obsidian}",
+        "args": [],
+        "env": {
+          "OBSIDIAN_API_KEY": "REPLACE_WITH_LOCAL_REST_API_KEY",
+          "OBSIDIAN_HOST": "127.0.0.1",
+          "OBSIDIAN_PORT": "27123"
+        }
+      },
+      "secretEnv": ["OBSIDIAN_API_KEY"],
+      "requiresApp": true,
+      "appSetup": "Install the \"Local REST API\" community plugin in Obsidian, then run scripts/configure_obsidian.py to copy its key into mcp_config.json.",
+      "bridge": { "kind": "http", "port": 27123, "endpoint": "/" }
+    },
+
+    "aseprite": {
+      "origin": "first-party",
+      "runtime": "stdio",
+      "drives": "Aseprite",
+      "owns": "Pixel art, sprites, spritesheets, palettes",
+      "license": "MIT",
+      "repo": "https://github.com/diivi/aseprite-mcp",
+      "modified": true,
+      "path": "servers/aseprite",
+      "install": { "type": "uv-project" },
+      "client": {
+        "command": "uv",
+        "args": ["--directory", "{path}", "run", "-m", "aseprite_mcp"],
+        "cwd": "{path}",
+        "env": { "ASEPRITE_PATH": "{app:aseprite}" }
+      },
+      "fallbackClient": {
+        "$comment": "Used when uv is not on PATH. cwd is what makes -m resolvable.",
+        "command": "python",
+        "args": ["-m", "aseprite_mcp"],
+        "cwd": "{path}",
+        "env": { "ASEPRITE_PATH": "{app:aseprite}" }
+      },
+      "requiresApp": false,
+      "appSetup": "None -- the server spawns `aseprite --batch` per call."
+    },
+
+    "blockbench": {
+      "origin": "vendored",
+      "runtime": "in-app",
+      "drives": "Blockbench",
+      "owns": "3D models, UV maps, model textures, bone rigs",
+      "license": "GPL-3.0",
+      "repo": "https://github.com/jasonjgardner/blockbench-mcp-plugin",
+      "modified": false,
+      "path": "servers/blockbench",
+      "install": {
+        "type": "manual",
+        "$comment": "The source is vendored here for licence compliance and reference, but the plugin runs inside Blockbench and is loaded by the app, not built by this repo.",
+        "steps": [
+          "Blockbench > File > Plugins > Load Plugin from URL",
+          "https://jasonjgardner.github.io/blockbench-mcp-plugin/mcp.js",
+          "Grant the network permission it asks for",
+          "Leave Blockbench open -- the plugin serves the MCP endpoint from inside the app"
+        ]
+      },
+      "client": {
+        "command": "npx",
+        "args": ["-y", "mcp-remote", "http://localhost:{port}/bb-mcp"]
+      },
+      "requiresApp": true,
+      "appSetup": "Blockbench must be open with the plugin loaded before any tool answers.",
+      "bridge": {
+        "kind": "http",
+        "port": 3000,
+        "portCandidates": [3000, 3456, 3001, 8080],
+        "endpoint": "/bb-mcp",
+        "$comment": "The plugin does not always land on 3000. write_mcp_config.py probes the candidates and pins whichever answers; check the plugin's status bar if none do."
+      }
+    },
+
+    "audacity": {
+      "origin": "vendored",
+      "runtime": "stdio",
+      "drives": "Audacity 3.x",
+      "owns": "Sound effects, music, recording, mastering",
+      "license": "Apache-2.0",
+      "repo": "https://github.com/xDarkzx/Audacity-MCP",
+      "modified": false,
+      "path": "servers/audacity",
+      "install": {
+        "type": "uv-venv",
+        "packages": ["-e", ".", "mcp[cli]>=1.0,<2"],
+        "$comment": "The <2 pin matters. This server imports mcp.server.fastmcp, which mcp 2.0 removed, and its own dependency is unpinned -- a fresh install picks 2.x and dies at startup with ModuleNotFoundError."
+      },
+      "client": {
+        "command": "{venvScript:audacity-mcp}",
+        "args": [],
+        "$comment": "The entry point is the console script `audacity-mcp`. `python -m audacity_mcp` does not work -- the package has no __main__.py."
+      },
+      "requiresApp": true,
+      "appSetup": "Audacity 3.x only (4.x is unsupported upstream). Enable Edit > Preferences > Modules > mod-script-pipe, then restart Audacity.",
+      "bridge": { "kind": "audacity-pipe" }
+    },
+
+    "godot-mcp": {
+      "origin": "first-party",
+      "runtime": "stdio",
+      "drives": "Godot 4",
+      "owns": "Scenes, nodes, scripts, gameplay, builds",
+      "license": "MIT",
+      "repo": "https://github.com/ee0pdt/Godot-MCP",
+      "modified": true,
+      "path": "servers/godot/server",
+      "install": { "type": "npm-build" },
+      "client": {
+        "command": "node",
+        "args": ["{path}/dist/index.js"],
+        "env": { "MCP_TRANSPORT": "stdio" }
+      },
+      "requiresApp": "scene tools only",
+      "appSetup": "Copy servers/godot/addons/godot_mcp/ into your Godot 4 project and enable it under Project > Project Settings > Plugins, or run scripts/install_godot_plugin.py. The headless tools need none of this.",
+      "bridge": { "kind": "tcp", "port": 9080 }
+    }
+  }
+}

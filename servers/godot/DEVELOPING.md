@@ -21,7 +21,7 @@ Godot Editor  (GDScript EditorPlugin)
 ## Directory Structure
 
 ```
-Godot-MCP/
+servers/godot/
 ├── server/                          # TypeScript side
 │   ├── src/
 │   │   ├── index.ts                 # Entry point — registers all tools & resources

@@ -1,18 +1,29 @@
 # =============================================================================
-# GameDev Toolkit MCP - Setup Script (Windows PowerShell)
+# GameDev Toolkit MCP - Setup (Windows PowerShell)
+#
+# Which servers exist, how each installs, and how each is configured all come
+# from toolkit.json. This script only sequences the work -- it hardcodes no
+# server list, so adding one to the registry is enough.
 # =============================================================================
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ConfigOut = Join-Path $RepoRoot "mcp_config.json"
+Set-Location $RepoRoot
 
 function Ok   { param($msg) Write-Host "[OK]   $msg" -ForegroundColor Green }
 function Warn { param($msg) Write-Host "[WARN] $msg" -ForegroundColor Yellow }
 function Info { param($msg) Write-Host "`n$msg" -ForegroundColor Cyan }
+function Fail { param($msg) Write-Host "[FAIL] $msg" -ForegroundColor Red; exit 1 }
+
+# Join-Path rather than string literals: a literal "servers\aseprite" is one
+# stray escape-interpreting layer away from becoming "servers<BEL>seprite",
+# which is exactly how this script broke before.
+$AsepriteDir = Join-Path (Join-Path $RepoRoot "servers") "aseprite"
+$GodotServer = Join-Path (Join-Path (Join-Path $RepoRoot "servers") "godot") "server"
 
 Info "=== GameDev Toolkit MCP Setup (Windows) ==="
 
-# ---- Check prerequisites ----------------------------------------------------
+# ---- Prerequisites ----------------------------------------------------------
 
 Info "Checking prerequisites..."
 
@@ -20,19 +31,23 @@ function Check-Command {
     param($name, $hint)
     if (Get-Command $name -ErrorAction SilentlyContinue) {
         Ok "$name found"
-    } else {
-        Warn "$name not found - $hint"
+        return $true
     }
+    Warn "$name not found - $hint"
+    return $false
 }
 
-Check-Command "python"  "Install from https://python.org (3.12+ required)"
-Check-Command "uv"      "Install with: winget install astral-sh.uv  OR  pip install uv"
-Check-Command "node"    "Install from https://nodejs.org (18+ required)"
-Check-Command "npm"     "Comes with Node.js"
+$HasPython = Check-Command "python" "Install from https://python.org (3.12+ required)"
+$HasUv     = Check-Command "uv"     "Install with: winget install astral-sh.uv  OR  pip install uv"
+Check-Command "node" "Install from https://nodejs.org (18+ required)" | Out-Null
+Check-Command "npm"  "Comes with Node.js"                             | Out-Null
+Check-Command "git"  "Needed to update the vendored servers"               | Out-Null
+
+if (-not $HasPython) { Fail "python is required to run the setup helpers." }
 
 try {
-    $PyVer = python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
-    $Parts = $PyVer.Split(".")
+    $PyVer   = python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+    $Parts   = $PyVer.Split(".")
     $PyMajor = [int]$Parts[0]
     $PyMinor = [int]$Parts[1]
     if (($PyMajor -gt 3) -or (($PyMajor -eq 3) -and ($PyMinor -ge 12))) {
@@ -45,7 +60,7 @@ try {
 }
 
 try {
-    $NodeVer = (node --version).TrimStart("v")
+    $NodeVer   = (node --version).TrimStart("v")
     $NodeMajor = [int]($NodeVer.Split(".")[0])
     if ($NodeMajor -ge 18) {
         Ok "Node.js v$NodeVer"
@@ -56,133 +71,74 @@ try {
     Warn "Could not determine Node.js version"
 }
 
-# ---- Aseprite MCP -----------------------------------------------------------
+# ---- First-party servers ----------------------------------------------------
 
-Info "Setting up the aseprite server..."
+Info "Installing the aseprite server (servers\aseprite)..."
 
-Push-Location (Join-Path $RepoRoot "serversseprite")
-
-if (Get-Command "uv" -ErrorAction SilentlyContinue) {
-    uv sync
-    Ok "aseprite server dependencies installed (uv)"
-} else {
-    Warn "uv not found, falling back to pip"
-    python -m pip install -r requirements.txt
-    Ok "aseprite server dependencies installed (pip)"
-}
-
-Pop-Location
-
-# ---- Godot MCP server -------------------------------------------------------
-
-Info "Building the godot-mcp server..."
-
-Push-Location (Join-Path $RepoRoot "servers\godot\server")
-npm install
-Ok "npm packages installed"
-npm run build
-Ok "TypeScript compiled"
-Pop-Location
-
-# ---- Detect Aseprite path ---------------------------------------------------
-
-Info "Looking for Aseprite..."
-
-$AsepriteExe = $null
-$Candidates = @(
-    "C:\Program Files\Aseprite\Aseprite.exe",
-    "C:\Program Files (x86)\Steam\steamapps\common\Aseprite\Aseprite.exe",
-    "$env:LOCALAPPDATA\Programs\Aseprite\Aseprite.exe",
-    "D:\Games\Steam\steamapps\common\Aseprite\Aseprite.exe",
-    "D:\Program Files\Aseprite\Aseprite.exe"
-)
-
-foreach ($c in $Candidates) {
-    if (Test-Path $c) {
-        $AsepriteExe = $c
-        Ok "Aseprite found: $c"
-        break
+Push-Location $AsepriteDir
+try {
+    if ($HasUv) {
+        uv sync
+        Ok "dependencies installed (uv)"
+    } else {
+        Warn "uv not found, falling back to pip"
+        python -m pip install -r requirements.txt
+        Ok "dependencies installed (pip)"
     }
+} finally {
+    Pop-Location
 }
 
-if (-not $AsepriteExe) {
-    try {
-        $reg = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*" |
-               Where-Object { $_.DisplayName -like "*Aseprite*" } |
-               Select-Object -First 1
-        if ($reg -and $reg.InstallLocation) {
-            $candidate = Join-Path $reg.InstallLocation "Aseprite.exe"
-            if (Test-Path $candidate) {
-                $AsepriteExe = $candidate
-                Ok "Aseprite found via registry: $candidate"
-            }
-        }
-    } catch {}
+Info "Building the godot-mcp server (servers\godot\server)..."
+
+Push-Location $GodotServer
+try {
+    npm install
+    Ok "npm packages installed"
+    npm run build
+    Ok "TypeScript compiled"
+} finally {
+    Pop-Location
 }
 
-if (-not $AsepriteExe) {
-    Warn "Aseprite not found automatically. Common locations:"
-    Write-Host "    Steam:   C:\Program Files (x86)\Steam\steamapps\common\Aseprite\Aseprite.exe"
-    Write-Host "    Direct:  C:\Program Files\Aseprite\Aseprite.exe"
-    $AsepriteExe = "C:\\path\\to\\Aseprite.exe"
-}
+# ---- Upstream servers -------------------------------------------------------
 
-# ---- Generate mcp_config.json -----------------------------------------------
+Info "Building the vendored servers' virtualenvs..."
+
+# These exit non-zero when a server needs attention, which is a warning here,
+# not a reason to abandon the rest of setup.
+$ErrorActionPreference = "Continue"
+python scripts\install_vendored.py
+if ($LASTEXITCODE -ne 0) { Warn "some vendored servers need attention (see above)" }
+
+# ---- MCP client config ------------------------------------------------------
 
 Info "Generating mcp_config.json..."
 
-$AsepriteMcpDir  = (Join-Path $RepoRoot "serversseprite") -replace '\\', '/'
-$GodotServerJs   = (Join-Path $RepoRoot "servers\godot\server\dist\index.js") -replace '\\', '/'
-$AsepriteExeJson = $AsepriteExe -replace '\\', '/'
+python scripts\write_mcp_config.py
+if ($LASTEXITCODE -ne 0) { Fail "could not generate mcp_config.json" }
 
-if (Get-Command "uv" -ErrorAction SilentlyContinue) {
-    $AsepCmd  = "uv"
-    $AsepArgs = "[`"--directory`", `"$AsepriteMcpDir`", `"run`", `"-m`", `"aseprite_mcp`"]"
-} else {
-    $AsepCmd  = "python"
-    $AsepArgs = "[`"-m`", `"aseprite_mcp`"]"
-}
+# ---- Next steps -------------------------------------------------------------
 
-$Config = @"
-{
-  "mcpServers": {
-    "aseprite": {
-      "command": "$AsepCmd",
-      "args": $AsepArgs,
-      "cwd": "$AsepriteMcpDir",
-      "env": {
-        "ASEPRITE_PATH": "$AsepriteExeJson"
-      }
-    },
-    "godot-mcp": {
-      "command": "node",
-      "args": ["$GodotServerJs"],
-      "env": {
-        "MCP_TRANSPORT": "stdio"
-      }
-    }
-  }
-}
+Info "=== Setup Complete ==="
+
+Write-Host @"
+
+Next steps:
+
+  1. Merge mcp_config.json into your MCP client's config:
+       $env:APPDATA\Claude\claude_desktop_config.json
+
+  2. Install the Godot plugin into your game project:
+       python scripts\install_godot_plugin.py C:\path\to\your\godot\project
+     Then enable it: Project > Project Settings > Plugins > Godot MCP
+
+  3. Wire up Obsidian (needs the Local REST API community plugin):
+       python scripts\configure_obsidian.py
+
+  4. Restart your MCP client, then check everything at once:
+       python scripts\verify_toolkit.py --quick
+
+Applications that must be running for their server to answer: Godot (scene
+tools only), Blockbench, Audacity, Obsidian. Aseprite does not.
 "@
-
-$Config | Out-File -FilePath $ConfigOut -Encoding UTF8
-Ok "Config written to: $ConfigOut"
-
-# ---- Final instructions -----------------------------------------------------
-
-Info "=== Setup Complete ===`n"
-Write-Host "Next steps:"
-Write-Host ""
-Write-Host "  1. Copy or merge mcp_config.json into your Claude config location:"
-Write-Host "       $env:APPDATA\Claude\claude_desktop_config.json"
-Write-Host ""
-Write-Host "  2. Open your Godot project in the Godot editor."
-Write-Host "       Copy addons\godot_mcp\ to your project and enable the plugin:"
-Write-Host "       Project -> Project Settings -> Plugins -> Godot MCP -> Enable"
-Write-Host ""
-Write-Host "  3. Restart Claude Desktop (or reload MCP config in Claude Code)."
-Write-Host ""
-
-if ($AsepriteExe -eq "C:\\path\\to\\Aseprite.exe") {
-    Warn "Remember to update ASEPRITE_PATH in mcp_config.json with the real Aseprite path."
-}

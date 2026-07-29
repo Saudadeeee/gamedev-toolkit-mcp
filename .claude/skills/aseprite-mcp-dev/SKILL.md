@@ -1,11 +1,11 @@
 ---
 name: aseprite-mcp-dev
-description: Adding or modifying tools in the aseprite-mcp server itself — the ERROR protocol, Lua escaping, cel normalization, known Aseprite Lua traps, and the smoke test gate. Use when editing files under aseprite-mcp/aseprite_mcp/.
+description: Adding or modifying tools in the aseprite MCP server itself — the ERROR protocol, Lua escaping, cel normalization, known Aseprite Lua traps, and the smoke test gate. Use when editing files under servers/aseprite/aseprite_mcp/.
 ---
 
-# Working on the aseprite-mcp Server
+# Working on the aseprite MCP Server
 
-Read [`aseprite-mcp/instruction.md`](../../../aseprite-mcp/instruction.md) for the full architecture. This skill is the checklist for touching the code.
+Read [`servers/aseprite/DEVELOPING.md`](../../../servers/aseprite/DEVELOPING.md) for the full architecture. This skill is the checklist for touching the code.
 
 ## When to activate
 
