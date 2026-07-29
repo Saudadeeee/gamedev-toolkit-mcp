@@ -31,7 +31,7 @@ dev = [
 ]
 
 [project.urls]
-Repository = "https://github.com/Saudadeeee/Godot-x-Aseprite-MCP-all"
+Repository = "https://github.com/Saudadeeee/gamedev-toolkit-mcp"
 "Original Project" = "https://github.com/diivi/aseprite-mcp"
 
 [build-system]

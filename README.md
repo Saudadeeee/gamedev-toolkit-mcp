@@ -18,8 +18,8 @@ setup, config generation and verification all read it, so nothing hardcodes the 
 | `obsidian` | Obsidian | vendored — [MarkusPfundstein/mcp-obsidian](https://github.com/MarkusPfundstein/mcp-obsidian) · MIT | 15 |
 
 `get_toolkit_status` reports which applications are installed and which bridges
-are currently reachable — all three integrated servers need their app running,
-the two local ones mostly do not.
+are currently reachable — all three vendored servers need their app running, the
+two first-party ones mostly do not.
 
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue)](https://python.org)
 [![Node.js 18+](https://img.shields.io/badge/Node.js-18+-green)](https://nodejs.org)
@@ -38,11 +38,11 @@ User request
      │
      ▼
 AI reads AGENTS.md
-     ├── plan / design doc / notes     →  obsidian    (15 tools, upstream)
-     ├── sprite / texture / animation  →  aseprite    (165 tools, this repo)
-     ├── 3D model / UV / rig           →  blockbench  (94 tools, upstream plugin)
-     ├── SFX / music / audio cleanup   →  audacity    (131 tools, upstream)
-     └── scene / node / script / build →  godot-mcp   (141 tools, this repo)
+     ├── plan / design doc / notes     →  obsidian    (15 tools, vendored)
+     ├── sprite / texture / animation  →  aseprite    (165 tools, first-party)
+     ├── 3D model / UV / rig           →  blockbench  (94 tools, vendored)
+     ├── SFX / music / audio cleanup   →  audacity    (131 tools, vendored)
+     └── scene / node / script / build →  godot-mcp   (141 tools, first-party)
 ```
 
 **Combined workflow for a complete game element:**
@@ -161,7 +161,7 @@ Upstream contributes the animation engine (eased tweens, tags, onion skin), pixe
 **Option A — Automated (recommended):**
 
 ```bash
-git clone https://github.com/Saudadeeee/Godot-x-Aseprite-MCP-all.git gamedev-toolkit-mcp
+git clone https://github.com/Saudadeeee/gamedev-toolkit-mcp.git
 cd gamedev-toolkit-mcp
 
 .\setup.ps1                          # Windows

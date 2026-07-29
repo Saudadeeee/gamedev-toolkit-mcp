@@ -42,7 +42,7 @@ This project is **GPL-3.0-or-later**; see [licensing.md](licensing.md).
 ### Windows
 
 ```powershell
-git clone https://github.com/Saudadeeee/Godot-x-Aseprite-MCP-all.git gamedev-toolkit-mcp
+git clone https://github.com/Saudadeeee/gamedev-toolkit-mcp.git
 cd gamedev-toolkit-mcp
 .\setup.ps1
 ```
@@ -50,7 +50,7 @@ cd gamedev-toolkit-mcp
 ### macOS / Linux
 
 ```bash
-git clone https://github.com/Saudadeeee/Godot-x-Aseprite-MCP-all.git gamedev-toolkit-mcp
+git clone https://github.com/Saudadeeee/gamedev-toolkit-mcp.git
 cd gamedev-toolkit-mcp
 chmod +x setup.sh
 ./setup.sh
@@ -73,7 +73,7 @@ Never commit it.
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/Saudadeeee/Godot-x-Aseprite-MCP-all.git gamedev-toolkit-mcp
+git clone https://github.com/Saudadeeee/gamedev-toolkit-mcp.git
 cd gamedev-toolkit-mcp
 ```
 
