@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCE = ROOT / "Godot-MCP" / "addons" / "godot_mcp"
+SOURCE = ROOT / "servers" / "godot" / "addons" / "godot_mcp"
 PLUGIN_LINE = "res://addons/godot_mcp/plugin.cfg"
 
 # Where to look when asked to list projects.

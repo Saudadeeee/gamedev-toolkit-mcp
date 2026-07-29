@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Godot x Aseprite MCP - Setup Script (Linux / macOS)
+# GameDev Toolkit MCP - Setup Script (Linux / macOS)
 # =============================================================================
 set -e
 
@@ -18,7 +18,7 @@ warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 fail() { echo -e "${RED}[FAIL]${NC} $1"; exit 1; }
 info() { echo -e "${BOLD}$1${NC}"; }
 
-info "\n=== Godot x Aseprite MCP Setup ===\n"
+info "\n=== GameDev Toolkit MCP Setup ===\n"
 
 # ---- Check prerequisites ----------------------------------------------------
 
@@ -58,24 +58,24 @@ echo ""
 
 # ---- Aseprite MCP -----------------------------------------------------------
 
-info "Setting up aseprite-mcp..."
+info "Setting up the aseprite server..."
 
-cd "$REPO_ROOT/aseprite-mcp"
+cd "$REPO_ROOT/servers/aseprite"
 
 if command -v uv &>/dev/null; then
-    uv sync && ok "aseprite-mcp dependencies installed (uv)"
+    uv sync && ok "aseprite server dependencies installed (uv)"
 else
     warn "uv not found, falling back to pip"
-    python3 -m pip install -r requirements.txt && ok "aseprite-mcp dependencies installed (pip)"
+    python3 -m pip install -r requirements.txt && ok "aseprite server dependencies installed (pip)"
 fi
 
 echo ""
 
 # ---- Godot MCP server -------------------------------------------------------
 
-info "Building Godot-MCP server..."
+info "Building the godot-mcp server..."
 
-cd "$REPO_ROOT/Godot-MCP/server"
+cd "$REPO_ROOT/servers/godot/server"
 npm install && ok "npm packages installed"
 npm run build && ok "TypeScript compiled"
 
@@ -116,8 +116,8 @@ echo ""
 
 info "Generating mcp_config.json..."
 
-ASEPRITE_MCP_DIR="$REPO_ROOT/aseprite-mcp"
-GODOT_SERVER_JS="$REPO_ROOT/Godot-MCP/server/dist/index.js"
+ASEPRITE_MCP_DIR="$REPO_ROOT/servers/aseprite"
+GODOT_SERVER_JS="$REPO_ROOT/servers/godot/server/dist/index.js"
 
 if command -v uv &>/dev/null; then
     ASEPRITE_CMD="uv"

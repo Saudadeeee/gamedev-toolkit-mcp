@@ -78,7 +78,10 @@ mcp_config.json
 # ============================================================
 # AI agent local settings (contain personal paths/permissions)
 # ============================================================
-.claude/
+# .claude/skills/ is project content and IS tracked -- only the local
+# machine's settings are personal.
+.claude/settings.local.json
+**/.claude/settings.json
 .cursor/
 .aider*
 .continue/

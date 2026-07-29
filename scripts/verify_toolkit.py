@@ -28,8 +28,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-ASEPRITE_MCP = ROOT / "aseprite-mcp"
-GODOT_SERVER = ROOT / "Godot-MCP" / "server"
+ASEPRITE_MCP = ROOT / "servers" / "aseprite"
+GODOT_SERVER = ROOT / "servers" / "godot" / "server"
 VENDOR = ROOT / "vendor"
 
 GODOT_BRIDGE_PORT = 9080
@@ -127,6 +127,18 @@ def windows_pipe_present(name: str) -> bool:
     return ctypes.get_last_error() in (121, 231)
 
 
+def audacity_pipes_live() -> bool:
+    """Whether Audacity is running with mod-script-pipe listening."""
+    if platform.system() == "Windows":
+        return all(windows_pipe_present(name) for name in
+                   (r"\\.\pipe\ToSrvPipe", r"\\.\pipe\FromSrvPipe"))
+
+    uid = os.getuid() if hasattr(os, "getuid") else 0
+    return all(os.path.exists(path) for path in
+               (f"/tmp/audacity_script_pipe.to.{uid}",
+                f"/tmp/audacity_script_pipe.from.{uid}"))
+
+
 def configured_obsidian_key() -> str:
     """The Obsidian API key as the MCP client will actually see it.
 
@@ -178,12 +190,17 @@ def speaks_mcp(port: int, endpoint: str) -> bool:
 
 
 def mcp_handshake(command: list[str], cwd: Path, env: dict | None = None,
-                  timeout: int = 90) -> tuple[bool, int, str]:
+                  timeout: int = 90, probe_tool: str | None = None) -> tuple[bool, int, str]:
     """Speak MCP over stdio and return (ok, tool_count, message).
 
     Responses are read as they arrive and the process is killed once the
     answers are in. An MCP server is not supposed to exit when stdin closes --
     waiting for it to would hang until the timeout on every healthy server.
+
+    probe_tool names a read-only tool to call afterwards. A server can list
+    tools perfectly while the application behind it is unreachable, so for
+    those servers listing alone is not evidence the chain works. On success
+    the message reports the probe; on failure it says what broke.
     """
     resolved = resolve(command[0])
     if resolved is None:
@@ -196,6 +213,10 @@ def mcp_handshake(command: list[str], cwd: Path, env: dict | None = None,
         {"jsonrpc": "2.0", "method": "notifications/initialized"},
         {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
     ]
+    if probe_tool:
+        requests.append({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+                         "params": {"name": probe_tool, "arguments": {}}})
+    wanted = {1, 2, 3} if probe_tool else {1, 2}
 
     try:
         proc = subprocess.Popen(
@@ -220,7 +241,7 @@ def mcp_handshake(command: list[str], cwd: Path, env: dict | None = None,
                 continue
             if "id" in message:
                 seen[message["id"]] = message
-                if 1 in seen and 2 in seen:
+                if wanted <= seen.keys():
                     return
 
     thread = threading.Thread(target=reader, daemon=True)
@@ -246,7 +267,20 @@ def mcp_handshake(command: list[str], cwd: Path, env: dict | None = None,
     if 2 not in seen or "result" not in seen[2]:
         return False, 0, "tools/list failed"
 
-    return True, len(seen[2]["result"]["tools"]), ""
+    count = len(seen[2]["result"]["tools"])
+    if not probe_tool:
+        return True, count, ""
+
+    if 3 not in seen or "result" not in seen[3]:
+        return False, count, f"{probe_tool} never answered -- application unreachable"
+
+    result = seen[3]["result"]
+    text = "".join(part.get("text", "") for part in result.get("content", [])
+                   if part.get("type") == "text")
+    if result.get("isError") or '"success": false' in text:
+        return False, count, f"{probe_tool}: {text.strip().splitlines()[0][:90]}"
+
+    return True, count, "application reachable"
 
 
 # --------------------------------------------------------------------- #
@@ -314,14 +348,7 @@ def check_bridges(report: Report) -> None:
             "and grant the network permission."
         )
 
-    if platform.system() == "Windows":
-        pipes = (r"\\.\pipe\ToSrvPipe", r"\\.\pipe\FromSrvPipe")
-    else:
-        uid = os.getuid() if hasattr(os, "getuid") else 0
-        pipes = (f"/tmp/audacity_script_pipe.to.{uid}",
-                 f"/tmp/audacity_script_pipe.from.{uid}")
-
-    if all(os.path.exists(p) for p in pipes):
+    if audacity_pipes_live():
         report.add("Audacity mod-script-pipe", OK, "pipes present")
     else:
         report.add("Audacity mod-script-pipe", SKIP, "pipes absent")
@@ -348,8 +375,14 @@ def check_servers(report: Report) -> None:
     if not audacity.exists():
         audacity = VENDOR / "Audacity-MCP" / ".venv" / "bin" / "audacity-mcp"
     if audacity.exists():
-        ok, count, message = mcp_handshake([str(audacity)], VENDOR / "Audacity-MCP")
-        report.add("audacity", OK if ok else BAD, f"{count} tools" if ok else message)
+        # With Audacity running, go one step further than listing tools and
+        # make a read-only call, which is the only thing that proves the
+        # server actually reaches the application over mod-script-pipe.
+        probe = "project_get_info" if audacity_pipes_live() else None
+        ok, count, message = mcp_handshake(
+            [str(audacity)], VENDOR / "Audacity-MCP", timeout=45, probe_tool=probe)
+        detail = f"{count} tools" + (f", {message}" if ok and message else "")
+        report.add("audacity", OK if ok else BAD, detail if ok else message)
     else:
         report.add("audacity", SKIP, "not installed under vendor/")
         report.manual.append(
@@ -381,14 +414,17 @@ def check_servers(report: Report) -> None:
 def check_suites(report: Report, quick: bool, apps: dict) -> None:
     heading("Test suites")
 
-    ok, out = run(["uv", "run", "pytest", "-q"], ASEPRITE_MCP, timeout=300)
+    # `python -m pytest` rather than the `pytest` console script: the script is
+    # a shim with an absolute path baked in, so it breaks whenever the venv is
+    # moved. The module entry point does not care where the venv lives.
+    ok, out = run(["uv", "run", "python", "-m", "pytest", "-q"], ASEPRITE_MCP, timeout=300)
     report.add("aseprite unit tests", OK if ok else BAD, out)
 
     ok, out = run(["npm", "run", "build"], GODOT_SERVER, timeout=600)
-    report.add("Godot-MCP TypeScript build", OK if ok else BAD, out if not ok else "tsc clean")
+    report.add("godot-mcp TypeScript build", OK if ok else BAD, out if not ok else "tsc clean")
 
     ok, out = run([sys.executable, str(ROOT / "scripts" / "ci" / "gdcheck.py"),
-                   str(ROOT / "Godot-MCP" / "addons")], ROOT, timeout=120)
+                   str(ROOT / "servers" / "godot" / "addons")], ROOT, timeout=120)
     report.add("GDScript structure", OK if ok else BAD, out)
 
     if quick:
@@ -404,7 +440,7 @@ def check_suites(report: Report, quick: bool, apps: dict) -> None:
         report.add("aseprite smoke + shading", SKIP, "Aseprite not found")
 
     if apps.get("godot", {}).get("found"):
-        demo = ROOT / "Godot-MCP" / "server" / "tests" / "headless_test.mjs"
+        demo = ROOT / "servers" / "godot" / "server" / "tests" / "headless_test.mjs"
         project = os.environ.get("GODOT_TEST_PROJECT")
         if project and Path(project).exists():
             ok, out = run(["node", str(demo), project], GODOT_SERVER, timeout=1800)
@@ -426,7 +462,7 @@ def main() -> int:
                         help="skip the suites that drive a real application")
     args = parser.parse_args()
 
-    print(_paint("Game Asset MCP Toolkit -- verification", "1"))
+    print(_paint("GameDev Toolkit MCP -- verification", "1"))
     print(f"repo: {ROOT}")
 
     report = Report()

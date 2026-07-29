@@ -1,4 +1,4 @@
-# Game Asset MCP Toolkit
+# GameDev Toolkit MCP
 
 Five MCP (Model Context Protocol) servers covering the complete game pipeline —
 planning, pixel art, 3D models, audio, and the engine that consumes them —
@@ -90,7 +90,7 @@ The Godot plugin (`addons/godot_mcp/`) runs a WebSocket server on port 9080 insi
 
 ## Projects
 
-### [Godot-MCP](./Godot-MCP/)
+### [godot-mcp](./servers/godot/)
 
 Godot 4 plugin + Node.js MCP server. AI assistants interact with your live Godot editor in real time via WebSocket.
 
@@ -123,7 +123,7 @@ Godot 4 plugin + Node.js MCP server. AI assistants interact with your live Godot
 | `signal_tools` | **Signal wiring** (connect/disconnect/list, persistent) and **node groups** |
 | `headless_tools` | **Works with the editor closed**: export builds, validate projects, reimport assets, run GDScript |
 
-### [aseprite-mcp](./aseprite-mcp/)
+### [aseprite](./servers/aseprite/)
 
 Python MCP server. Controls Aseprite programmatically via Lua script injection into its CLI (`aseprite --batch`).
 
@@ -160,8 +160,8 @@ Upstream contributes the animation engine (eased tweens, tags, onion skin), pixe
 
 ```bash
 # Clone
-git clone https://github.com/Saudadeeee/Godot-x-Aseprite-MCP-all.git
-cd "Godot-x-Aseprite-MCP-all"
+git clone https://github.com/Saudadeeee/gamedev-toolkit-mcp.git
+cd gamedev-toolkit-mcp
 
 # Windows
 .\setup.ps1
@@ -175,11 +175,11 @@ The script checks prerequisites, installs dependencies, builds the server, auto-
 **Option B — Manual:**
 
 ```bash
-# 1. Install Python dependencies (aseprite-mcp)
-cd aseprite-mcp && uv sync
+# 1. Install Python dependencies (aseprite server)
+cd servers/aseprite && uv sync
 
-# 2. Build Node.js server (Godot-MCP)
-cd ../Godot-MCP/server && npm install && npm run build
+# 2. Build the Node.js server (godot-mcp)
+cd ../servers/godot/server && npm install && npm run build
 
 # 3. Enable Godot plugin
 #    Copy addons/godot_mcp/ into your Godot 4 project root
@@ -226,7 +226,7 @@ Verify everything at once with `get_toolkit_status` (on the `aseprite` server).
 It reports which applications were found and which bridges are actually
 reachable, with the fix for each miss.
 
-For full instructions, troubleshooting, and platform-specific notes: **[SETUP.md](./SETUP.md)**
+For full instructions, troubleshooting, and platform-specific notes: **[docs/setup.md](./docs/setup.md)**
 
 ---
 
@@ -237,12 +237,12 @@ For full instructions, troubleshooting, and platform-specific notes: **[SETUP.md
   "mcpServers": {
     "aseprite": {
       "command": "uv",
-      "args": ["--directory", "/path/to/aseprite-mcp", "run", "-m", "aseprite_mcp"],
+      "args": ["--directory", "/path/to/servers/aseprite", "run", "-m", "aseprite_mcp"],
       "env": { "ASEPRITE_PATH": "/path/to/aseprite" }
     },
     "godot-mcp": {
       "command": "node",
-      "args": ["/path/to/Godot-MCP/server/dist/index.js"],
+      "args": ["/path/to/servers/godot/server/dist/index.js"],
       "env": { "MCP_TRANSPORT": "stdio" }
     }
   }
@@ -258,7 +258,7 @@ Config file locations:
 
 ## Tool Reference
 
-### Godot-MCP — 141 Tools
+### godot-mcp — 141 Tools
 
 | Category | Tools |
 |---|---|
@@ -286,7 +286,7 @@ Config file locations:
 | **Signals & Groups** | list_signals, list_connections, connect_signal, disconnect_signal, add/remove_node_to_group, list_nodes_in_group |
 | **Headless (no editor)** | godot_headless_info, validate_project_headless, list_export_presets, export_project, import_project_assets, run_headless_script |
 
-### Godot-MCP — 10+ Resource Endpoints
+### godot-mcp — 10+ Resource Endpoints
 
 Real-time data queried from the live Godot editor session:
 
@@ -294,7 +294,7 @@ Real-time data queried from the live Godot editor session:
 
 ---
 
-### aseprite-mcp — 165 Tools
+### aseprite — 165 Tools
 
 | Category | Tools |
 |---|---|
@@ -352,31 +352,41 @@ a GDScript that updates the HUD when the player's stats change.
 ## Repository Structure
 
 ```
-Godot x Aseprite MCP/
-├── AGENTS.md                       # AI routing instructions (auto-loaded by Claude)
-├── SETUP.md                        # Full setup guide with troubleshooting
-├── setup.sh                        # One-click setup (Linux/macOS)
-├── setup.ps1                       # One-click setup (Windows)
-├── claude_desktop_config.json      # MCP config template
+gamedev-toolkit-mcp/
+├── AGENTS.md                   # AI routing instructions (auto-loaded by Claude)
+├── CREDITS.md                  # what came from where
+├── setup.sh / setup.ps1        # one-click setup, writes mcp_config.json
 │
-├── Godot-MCP/
-│   ├── addons/godot_mcp/           # Godot 4 plugin — copy into your project
-│   │   ├── commands/               # 20 GDScript command handler modules
-│   │   ├── ui/                     # Editor panel (dock)
-│   │   └── utils/                  # WebSocket server, connection manager
-│   ├── server/
-│   │   └── src/
-│   │       ├── tools/              # 19 TypeScript MCP tool modules
-│   │       ├── resources/          # 10+ MCP resource endpoint definitions
-│   │       └── utils/              # WebSocket client, connection utilities
-│   └── docs/
+├── docs/
+│   └── setup.md                # full setup guide with troubleshooting
 │
-└── aseprite-mcp/
-    ├── aseprite_mcp/
-    │   ├── core/                   # MCP server core, Lua injector, command runner
-    │   ├── tools/                  # 31 Python tool modules
-    │   └── utils/                  # Lua script templates, constants
-    └── tests/
+├── .claude/skills/             # task playbooks the assistant loads on demand
+│
+├── servers/                    # the MCP servers built here
+│   ├── aseprite/               # Python — drives Aseprite over Lua batch scripts
+│   │   ├── aseprite_mcp/
+│   │   │   ├── core/           # command runner, Lua injector, path resolver
+│   │   │   ├── tools/          # tool modules, one per domain
+│   │   │   └── utils/          # shared Lua snippets and constants
+│   │   └── tests/
+│   │
+│   └── godot/                  # TypeScript server + Godot editor plugin
+│       ├── addons/godot_mcp/   # copy into your Godot project
+│       │   ├── commands/       # GDScript command handlers
+│       │   ├── ui/             # editor dock
+│       │   └── utils/          # WebSocket server, connection manager
+│       ├── server/src/
+│       │   ├── tools/          # TypeScript MCP tool modules
+│       │   ├── resources/      # MCP resource endpoints
+│       │   └── utils/          # WebSocket client, Godot CLI wrapper
+│       └── docs/
+│
+├── scripts/
+│   ├── verify_toolkit.py       # one command to check everything
+│   ├── install_godot_plugin.py
+│   └── configure_obsidian.py
+│
+└── vendor/                     # upstream servers, cloned not copied (gitignored)
 ```
 
 ---
@@ -385,9 +395,9 @@ Godot x Aseprite MCP/
 
 | Component | Version | Purpose |
 |---|---|---|
-| Python | 3.12+ | aseprite-mcp server |
+| Python | 3.12+ | `aseprite` server |
 | uv | latest | Python dependency manager |
-| Node.js | 18+ | Godot-MCP server |
+| Node.js | 18+ | `godot-mcp` server |
 | Godot Engine | 4.x | Target game engine (plugin required) |
 | Aseprite | 1.3+ | Pixel art tool (CLI scripting required) |
 
@@ -395,25 +405,23 @@ Godot x Aseprite MCP/
 
 ## Credits
 
-| Project | Original Author | Repository |
-|---|---|---|
-| Godot-MCP | [@ee0pdt](https://github.com/ee0pdt) | [ee0pdt/Godot-MCP](https://github.com/ee0pdt/Godot-MCP) |
-| aseprite-mcp | [@diivi](https://github.com/diivi) | [diivi/aseprite-mcp](https://github.com/diivi/aseprite-mcp) |
+The two servers built here started as forks:
 
-Both original projects are MIT licensed. This fork extends both without altering their core architecture, while combining them into a unified game-development pipeline.
+| Server | Original Author | Repository | Licence |
+|---|---|---|---|
+| `godot-mcp` | [@ee0pdt](https://github.com/ee0pdt) | [ee0pdt/Godot-MCP](https://github.com/ee0pdt/Godot-MCP) | MIT |
+| `aseprite` | [@diivi](https://github.com/diivi) | [diivi/aseprite-mcp](https://github.com/diivi/aseprite-mcp) | MIT |
 
----
-
-## Credits
-
-This project merges and extends several open-source MCP servers. See [CREDITS.md](./CREDITS.md) for exactly what came from where.
+The other three are integrated, not vendored — installed from their own
+projects under their own licences. [CREDITS.md](./CREDITS.md) records exactly
+what came from where, including features adapted rather than copied.
 
 ## License
 
 MIT — Copyright (c) 2026 Saudade. See [LICENSE](./LICENSE).
 
 The two merged upstreams keep their own copyright notices in
-`aseprite-mcp/LICENSE` and `Godot-MCP/LICENSE`. The three integrated servers
+`servers/aseprite/LICENSE` and `servers/godot/LICENSE`. The three integrated servers
 are installed from their own projects under their own licences and are not
 redistributed here — see [CREDITS.md](./CREDITS.md).
 

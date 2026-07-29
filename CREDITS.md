@@ -1,6 +1,6 @@
 # Credits
 
-**Maintainer:** Saudade — [Godot-x-Aseprite-MCP-all](https://github.com/Saudadeeee/Godot-x-Aseprite-MCP-all)
+**Maintainer:** Saudade — [gamedev-toolkit-mcp](https://github.com/Saudadeeee/gamedev-toolkit-mcp)
 
 This project is a merge and extension of several open-source MCP servers. This
 file records what came from where, so the attribution is specific rather than a
@@ -17,7 +17,7 @@ below, and the distinction matters — see the Licence section.
 ### [diivi/aseprite-mcp](https://github.com/diivi/aseprite-mcp)
 *Author: [@diivi](https://github.com/diivi) · MIT*
 
-The foundation of `aseprite-mcp/`. This project began as a separate fork and
+The foundation of `servers/aseprite/`. This project began as a separate fork and
 was later merged with upstream wholesale, so a large share of the Aseprite
 server is diivi's code, taken essentially unmodified:
 
@@ -39,7 +39,7 @@ approach, which had none of them.
 ### [ee0pdt/Godot-MCP](https://github.com/ee0pdt/Godot-MCP)
 *MIT*
 
-The base of `Godot-MCP/`: the WebSocket bridge between a Node.js MCP server and
+The base of `servers/godot/`: the WebSocket bridge between a Node.js MCP server and
 a GDScript editor plugin, the command-processor dispatch pattern, and the
 original node, script, scene, editor and project command sets.
 

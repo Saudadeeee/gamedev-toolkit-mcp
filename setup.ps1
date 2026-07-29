@@ -1,5 +1,5 @@
 # =============================================================================
-# Godot x Aseprite MCP - Setup Script (Windows PowerShell)
+# GameDev Toolkit MCP - Setup Script (Windows PowerShell)
 # =============================================================================
 $ErrorActionPreference = "Stop"
 
@@ -10,7 +10,7 @@ function Ok   { param($msg) Write-Host "[OK]   $msg" -ForegroundColor Green }
 function Warn { param($msg) Write-Host "[WARN] $msg" -ForegroundColor Yellow }
 function Info { param($msg) Write-Host "`n$msg" -ForegroundColor Cyan }
 
-Info "=== Godot x Aseprite MCP Setup (Windows) ==="
+Info "=== GameDev Toolkit MCP Setup (Windows) ==="
 
 # ---- Check prerequisites ----------------------------------------------------
 
@@ -58,26 +58,26 @@ try {
 
 # ---- Aseprite MCP -----------------------------------------------------------
 
-Info "Setting up aseprite-mcp..."
+Info "Setting up the aseprite server..."
 
-Push-Location (Join-Path $RepoRoot "aseprite-mcp")
+Push-Location (Join-Path $RepoRoot "serversseprite")
 
 if (Get-Command "uv" -ErrorAction SilentlyContinue) {
     uv sync
-    Ok "aseprite-mcp dependencies installed (uv)"
+    Ok "aseprite server dependencies installed (uv)"
 } else {
     Warn "uv not found, falling back to pip"
     python -m pip install -r requirements.txt
-    Ok "aseprite-mcp dependencies installed (pip)"
+    Ok "aseprite server dependencies installed (pip)"
 }
 
 Pop-Location
 
 # ---- Godot MCP server -------------------------------------------------------
 
-Info "Building Godot-MCP server..."
+Info "Building the godot-mcp server..."
 
-Push-Location (Join-Path $RepoRoot "Godot-MCP\server")
+Push-Location (Join-Path $RepoRoot "servers\godot\server")
 npm install
 Ok "npm packages installed"
 npm run build
@@ -131,8 +131,8 @@ if (-not $AsepriteExe) {
 
 Info "Generating mcp_config.json..."
 
-$AsepriteMcpDir  = (Join-Path $RepoRoot "aseprite-mcp") -replace '\\', '/'
-$GodotServerJs   = (Join-Path $RepoRoot "Godot-MCP\server\dist\index.js") -replace '\\', '/'
+$AsepriteMcpDir  = (Join-Path $RepoRoot "serversseprite") -replace '\\', '/'
+$GodotServerJs   = (Join-Path $RepoRoot "servers\godot\server\dist\index.js") -replace '\\', '/'
 $AsepriteExeJson = $AsepriteExe -replace '\\', '/'
 
 if (Get-Command "uv" -ErrorAction SilentlyContinue) {

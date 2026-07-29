@@ -1,4 +1,4 @@
-# CLAUDE.md - Game Asset MCP Toolkit
+# GameDev Toolkit MCP — Agent Instructions
 
 Five MCP servers covering the whole 2D/low-poly game pipeline: planning, art,
 models, audio and the engine that consumes them.
@@ -131,7 +131,7 @@ Detailed guidance lives in [`.claude/skills/`](./.claude/skills/). Load the one 
 | `audacity-audio` | Game audio: SFX design, loops, mastering, export settings that suit an engine |
 | `game-asset-pipeline` | Orchestration across all four: who owns what, handoff formats, folder layout |
 | `aseprite-godot-pipeline` | The 2D handoff in detail: `res://` paths, spritesheet JSON, pixel-art import settings |
-| `aseprite-mcp-dev` | Editing the aseprite-mcp server itself |
+| `aseprite-mcp-dev` | Editing the `aseprite` server itself (`servers/aseprite/`) |
 
 ---
 
@@ -296,9 +296,9 @@ Aseprite saves files wherever you specify. Godot expects `res://` paths for inte
 
 - [ ] Aseprite installed and `ASEPRITE_PATH` configured
 - [ ] Python 3.12+ and `uv` installed
-- [ ] `cd aseprite-mcp && uv sync` completed
+- [ ] `cd servers/aseprite && uv sync` completed
 - [ ] Node.js 18+ installed
-- [ ] `cd Godot-MCP/server && npm install && npm run build` completed
+- [ ] `cd servers/godot/server && npm install && npm run build` completed
 - [ ] Godot 4.x installed
 - [ ] Godot project open in editor with `godot_mcp` plugin enabled
 - [ ] Both MCP servers registered in Claude config

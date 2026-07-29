@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: aseprite-mcp
+        working-directory: servers/aseprite
 
     steps:
       - uses: actions/checkout@v4
@@ -30,7 +30,7 @@ jobs:
       # excluded in pyproject.toml rather than here -- pipeline_demo runs work
       # at import time, so pytest must not even collect it.
       - name: Unit tests
-        run: uv run pytest tests/ -v --cov=aseprite_mcp.core --cov-report=term-missing
+        run: uv run python -m pytest tests/ -v --cov=aseprite_mcp.core --cov-report=term-missing
 
       - name: Import every tool module
         run: uv run python -c "import aseprite_mcp.tools"
@@ -97,22 +97,22 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-          cache-dependency-path: Godot-MCP/server/package-lock.json
+          cache-dependency-path: servers/godot/server/package-lock.json
 
       - name: Install dependencies
-        working-directory: Godot-MCP/server
+        working-directory: servers/godot/server
         run: npm ci
 
       - name: Type-check and build
-        working-directory: Godot-MCP/server
+        working-directory: servers/godot/server
         run: npm run build
 
       - name: Verify the server completes an MCP handshake
-        working-directory: Godot-MCP/server
+        working-directory: servers/godot/server
         run: node ../../scripts/ci/probe_mcp_server.mjs dist/index.js
 
       # Godot itself is not installed here, so the plugin cannot be executed.
       # This catches the structural mistakes that are otherwise invisible
       # until the editor loads the addon.
       - name: GDScript structure check
-        run: python3 scripts/ci/gdcheck.py Godot-MCP/addons
+        run: python3 scripts/ci/gdcheck.py servers/godot/addons
