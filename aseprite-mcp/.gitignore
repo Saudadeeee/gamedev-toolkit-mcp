@@ -39,3 +39,7 @@ ENV/
 *.png
 *.gif
 *.jpg
+
+# Coverage
+.coverage
+htmlcov/

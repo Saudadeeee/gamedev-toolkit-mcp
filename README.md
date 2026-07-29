@@ -1,6 +1,23 @@
-# Godot x Aseprite MCP
+# Game Asset MCP Toolkit
 
-A monorepo combining two fully-extended MCP (Model Context Protocol) servers that cover the complete 2D game asset pipeline — pixel art creation in **Aseprite** and scene/logic building in **Godot Engine** — controlled entirely through natural language via AI assistants.
+Five MCP (Model Context Protocol) servers covering the complete game pipeline —
+planning, pixel art, 3D models, audio, and the engine that consumes them —
+driven entirely through natural language.
+
+Two servers are built and maintained here. Three are integrated from upstream:
+cloned into `vendor/` and installed, never copied into this repo's source.
+
+| Server | Drives | Source | Tools |
+|---|---|---|---|
+| `aseprite` | Aseprite | **this repo** | 165 |
+| `godot-mcp` | Godot 4 | **this repo** | 141 |
+| `blockbench` | Blockbench | [jasonjgardner/blockbench-mcp-plugin](https://github.com/jasonjgardner/blockbench-mcp-plugin) · GPL-3.0 | 94 |
+| `audacity` | Audacity 3.x | [xDarkzx/Audacity-MCP](https://github.com/xDarkzx/Audacity-MCP) · Apache-2.0 | 131 + 9 pipelines |
+| `obsidian` | Obsidian | [MarkusPfundstein/mcp-obsidian](https://github.com/MarkusPfundstein/mcp-obsidian) · MIT | 15 |
+
+`get_toolkit_status` reports which applications are installed and which bridges
+are currently reachable — all three integrated servers need their app running,
+the two local ones mostly do not.
 
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue)](https://python.org)
 [![Node.js 18+](https://img.shields.io/badge/Node.js-18+-green)](https://nodejs.org)
@@ -12,21 +29,24 @@ A monorepo combining two fully-extended MCP (Model Context Protocol) servers tha
 
 ## What This Is
 
-Two MCP servers run simultaneously. An AI assistant reads [`AGENTS.md`](./AGENTS.md) to understand when to use Aseprite (art) vs Godot (scenes/logic), and routes each task automatically:
+All configured servers run simultaneously. An AI assistant reads [`AGENTS.md`](./AGENTS.md) to learn which server owns which domain, and routes each task accordingly:
 
 ```
 User request
      │
      ▼
 AI reads AGENTS.md
-     ├── art / sprite / animation task  →  aseprite-mcp tools (70+ tools)
-     └── scene / node / script task    →  godot-mcp tools (100+ tools)
+     ├── plan / design doc / notes     →  obsidian    (15 tools, upstream)
+     ├── sprite / texture / animation  →  aseprite    (165 tools, this repo)
+     ├── 3D model / UV / rig           →  blockbench  (94 tools, upstream plugin)
+     ├── SFX / music / audio cleanup   →  audacity    (131 tools, upstream)
+     └── scene / node / script / build →  godot-mcp   (141 tools, this repo)
 ```
 
 **Combined workflow for a complete game element:**
 
 ```
-[Aseprite]  create_canvas → add_layer → draw_pixels → apply_effects → export_sprite_sheet
+[Aseprite]  create_canvas → add_layer → draw_*_at → tween_cel_positions_eased → export_spritesheet
                                                                               │
 [Godot]                                              load_sprite -> create_node -> create_script -> save_scene
 ```
@@ -39,9 +59,9 @@ This project is **not** a simple tool addition. It is a ground-up architectural 
 
 | Dimension | Original (bradypp/godot-mcp) | This Project |
 |---|---|---|
-| **Godot Tools** | 16 | 100+ |
-| **Aseprite Tools** | 0 | 70+ |
-| **Total MCP Tools** | 16 | 170+ |
+| **Godot Tools** | 16 | 141 |
+| **Aseprite Tools** | 0 | 165 |
+| **Total MCP Tools** | 16 | 306 in-repo (+ Blockbench and Audacity upstream) |
 | **MCP Resources** | None | 10+ resource endpoints |
 | **Godot Connection** | Subprocess spawn per command | Persistent WebSocket bridge via Godot plugin |
 | **Godot Version** | 3.5+ and 4.x | Godot 4.x only |
@@ -76,7 +96,7 @@ Godot 4 plugin + Node.js MCP server. AI assistants interact with your live Godot
 
 - **Based on:** [ee0pdt/Godot-MCP](https://github.com/ee0pdt/Godot-MCP)
 - **Stack:** TypeScript (MCP server) + GDScript (Godot plugin)
-- **Tool modules:** 19 TypeScript modules → 100+ tools
+- **Tool modules:** 23 TypeScript modules → 141 tools
 - **GDScript command modules:** 20 modules handling execution inside the editor
 - **MCP Resources:** 10+ live data endpoints (scene tree, scripts, project settings, etc.)
 
@@ -99,31 +119,38 @@ Godot 4 plugin + Node.js MCP server. AI assistants interact with your live Godot
 | `tilemap_tools` | Set/erase tile cells, paint areas, clear layers; GridMap support |
 | `tween_tools` | Animate node properties via tween, generate tween scripts |
 | `editor_tools` | Execute EditorScript, get current scene, play/stop scene |
+| `capture_tools` | **Render a scene offscreen and return the image** — visual feedback without running the game |
+| `signal_tools` | **Signal wiring** (connect/disconnect/list, persistent) and **node groups** |
+| `headless_tools` | **Works with the editor closed**: export builds, validate projects, reimport assets, run GDScript |
 
 ### [aseprite-mcp](./aseprite-mcp/)
 
 Python MCP server. Controls Aseprite programmatically via Lua script injection into its CLI (`aseprite --batch`).
 
-- **Based on:** [diivi/aseprite-mcp](https://github.com/diivi/aseprite-mcp)
+- **Merged from:** [diivi/aseprite-mcp](https://github.com/diivi/aseprite-mcp) upstream + this fork's own tools
 - **Stack:** Python 3.12+
-- **Tool modules:** 17 Python modules → 70+ tools
+- **Tool modules:** 34 Python modules → 165 tools
 
-**Extended beyond the diivi base with:**
+**This fork adds on top of the diivi base:**
 
 | Module | Capabilities |
 |---|---|
-| `drawing_advanced.py` | Polygons, Bezier curves, gradients, patterns, brush strokes, text |
-| `layer_advanced.py` | Layer groups, blend modes, opacity control, layer moving/merging |
-| `cel_operations.py` | Copy/move/clear/link cels, set cel opacity, tile get/set |
-| `effects.py` | Blur, HSL adjust, brightness/contrast, posterize, pixelate, outline, drop shadow, invert |
-| `transform.py` | Flip, rotate, crop, resize, scale, expand canvas, trim |
-| `selection.py` | Select all/rectangle, deselect, invert, delete selection |
-| `clipboard.py` | Copy/cut/paste, paste as new layer, merge layers |
-| `spritesheet.py` | Export spritesheets with JSON metadata, extract color palettes, generate variations |
-| `tilemap.py` | Create tilesets, tilemap layers, import tileset from image, setup tileset |
-| `slices.py` | List/create slices, nine-patch slices, export slices |
-| `file_utils.py` | Batch convert, optimize, backup/restore, compare sprites, convert color mode |
-| `ai_features.py` | Auto colorization, AI-guided upscaling, auto outline, lineart cleanup |
+| `drawing_advanced.py` | Bezier curves, projected linear/radial gradients, thick brush strokes, image-tiled fills |
+| `effects.py` | Posterize, pixelate, drop shadow — the effects Aseprite has no native filter for |
+| `layer_advanced.py` | Reparent a layer into/out of a group, merge N layers in z-order |
+| `cel_operations.py` | Cel linking across a frame range |
+| `transform_sprite.py` | Sprite-wide flip/rotate/resize/crop/trim, grid bounds |
+| `palette_extra.py` | Palette file import (.gpl/.act/.ase), simple create/get/append |
+| `slices_extra.py` | Nine-patch slices, slice export with JSON map |
+| `export_extra.py` | Every frame as its own numbered file |
+| `file_utils.py` | Batch convert, optimize, backup/restore, cross-file sprite comparison |
+| `ai_features.py` | Brightness-ramp recolor, lineart cleanup, structural audit, batch ops, hue variations |
+| `shading.py` | Directional shading (8 light directions, smooth/hard/pillow), CIELAB palette snapping, antialias detect + apply |
+| `dither_tools.py` | 15 dither patterns, Floyd-Steinberg error diffusion, perceptual palette sorting, ramp suggestion |
+| `core/color_space.py` | CIELAB conversion, perceptual nearest-colour matching, Rec. 709 luminance |
+| `system_info.py` | Aseprite + Godot path auto-detection — the bridge to `godot-mcp` |
+
+Upstream contributes the animation engine (eased tweens, tags, onion skin), pixel readback, scene validation/audit, native engine filters, dithering and the layer-targeted `*_at` drawing tools.
 
 ---
 
@@ -161,6 +188,44 @@ cd ../Godot-MCP/server && npm install && npm run build
 # 4. Configure your MCP client (see section below)
 ```
 
+**Option C — the three upstream servers:**
+
+Cloned into `vendor/` (gitignored) and installed into their own virtualenvs, so
+their source never enters this repo's history or licence surface.
+
+```bash
+mkdir -p vendor && cd vendor
+
+# Audacity (Apache-2.0) -- stdio, over Audacity's scripting pipe
+git clone --depth 1 https://github.com/xDarkzx/Audacity-MCP
+cd Audacity-MCP && uv venv && uv pip install -e . "mcp[cli]>=1.0,<2" && cd ..
+#   The <2 pin matters: mcp 2.0 removed mcp.server.fastmcp, which this server
+#   imports. Its own dependency is unpinned, so a fresh install picks 2.x and
+#   dies at startup with ModuleNotFoundError.
+#   Then in Audacity: Edit > Preferences > Modules > mod-script-pipe = Enabled,
+#   and restart. Audacity 3.x only -- 4.x is not supported upstream.
+
+# Obsidian (MIT) -- stdio, over the Local REST API plugin
+git clone --depth 1 https://github.com/MarkusPfundstein/mcp-obsidian
+cd mcp-obsidian && uv venv && uv pip install -e . "mcp>=1.1,<2" && cd ..
+#   Install the "Local REST API" community plugin in Obsidian, then copy its
+#   API key into OBSIDIAN_API_KEY in mcp_config.json.
+
+# Blockbench (GPL-3.0) -- a plugin inside the app; nothing to install here
+#   1. Blockbench > File > Plugins > Load Plugin from URL
+#   2. https://jasonjgardner.github.io/blockbench-mcp-plugin/mcp.js
+#   3. Grant the network permission it asks for
+#   4. Leave Blockbench open; it serves http://localhost:3000/bb-mcp
+#   The MCP client reaches it through mcp-remote (already in mcp_config.json).
+```
+
+The entry point for Audacity-MCP is the console script `audacity-mcp`, not
+`python -m audacity_mcp` — the package has no `__main__.py`.
+
+Verify everything at once with `get_toolkit_status` (on the `aseprite` server).
+It reports which applications were found and which bridges are actually
+reachable, with the fix for each miss.
+
 For full instructions, troubleshooting, and platform-specific notes: **[SETUP.md](./SETUP.md)**
 
 ---
@@ -193,7 +258,7 @@ Config file locations:
 
 ## Tool Reference
 
-### Godot-MCP — 100+ Tools
+### Godot-MCP — 141 Tools
 
 | Category | Tools |
 |---|---|
@@ -216,7 +281,10 @@ Config file locations:
 | **Tween** | animate_node_property, create_tween_script, create_animation_from_tween |
 | **Path** | configure_path_follow, add/remove/set_path_point, get_path_info, clear_path |
 | **Playback** | play_animation, stop_animation, get_play_status |
-| **System Info** | get_application_info, get_godot_info, get_aseprite_info, get_system_info, resolve_application_path |
+| **Toolkit Status** | get_toolkit_status, get_app_info, get_aseprite_info, get_godot_info, get_blockbench_info, get_audacity_info, get_system_info, resolve_application_path |
+| **Visual Feedback** | capture_scene_render, capture_editor_viewport |
+| **Signals & Groups** | list_signals, list_connections, connect_signal, disconnect_signal, add/remove_node_to_group, list_nodes_in_group |
+| **Headless (no editor)** | godot_headless_info, validate_project_headless, list_export_presets, export_project, import_project_assets, run_headless_script |
 
 ### Godot-MCP — 10+ Resource Endpoints
 
@@ -226,29 +294,31 @@ Real-time data queried from the live Godot editor session:
 
 ---
 
-### aseprite-mcp — 70+ Tools
+### aseprite-mcp — 165 Tools
 
 | Category | Tools |
 |---|---|
-| **Canvas** | create_canvas, add_layer, add_frame |
-| **Drawing** | draw_pixels, draw_line, draw_rectangle, draw_circle, fill_area, erase_area |
+| **Canvas** | create_canvas, add_layer, add_group, add_frame, set_frame, set_frame_duration, set_layer |
+| **Drawing** | draw_pixels, draw_line, draw_rectangle, draw_circle, fill_area — each with a layer-targeted `*_at` variant — plus draw_ellipse_at, draw_polygon, draw_path, apply_gradient_rect |
+| **Drawing Advanced** | draw_bezier_curve, draw_gradient, draw_pattern, apply_brush_stroke |
+| **Animation** | add_frames, set_frame_duration_all, duplicate_frame_range, copy_frame, delete_frame, set_tag, delete_tag, set_onion_skin, propagate_cels, propagate_frame_to_range |
+| **Cel** | create_cel, copy_cel, clear_cel, set_cel_position, set_cel_opacity, offset_cel_positions, link_cels |
+| **Tweening** | tween_cel_positions, tween_cel_positions_eased, tween_cel_opacity_eased, tween_cel_scale_eased, oscillate_cel_positions |
+| **Layer** | delete_layer, rename_layer, duplicate_layer, reorder_layer, set_layer_visibility/opacity/blend_mode, merge_layer_down, merge_layers, flatten_sprite, move_layer_to_group, copy_layers_between_sprites |
+| **Pixel Readback** | get_pixel_color, get_pixels_rect, get_composite_pixel, get_composite_rect |
+| **Analysis & QA** | get_sprite_info, get_color_stats, compare_frames, render_onion_skin, validate_scene, audit_animation, animation_sanitize, ensure_layers_present, suggest_improvements |
+| **Palette** | get_palette, set_palette, create_palette, add_color_to_palette, get_palette_colors, load_palette_from_file, generate_color_ramp, quantize_to_palette, remap_colors_in_cel_range, list/apply_palette_preset, set_color_mode |
+| **Effects** | outline_native, outline_cel, adjust_hsl, adjust_hsl_native, adjust_brightness_contrast, invert_colors, apply_convolution, replace_color, apply_dither_gradient, apply_dither_pattern, posterize, pixelate, drop_shadow |
+| **Regions** | move_region, copy_region, erase_region, erase_color |
+| **Transform** | flip_layer, rotate_layer, resize_canvas, crop_canvas, flip_horizontal/vertical, rotate, resize_sprite, crop_sprite, trim_sprite, set_sprite_grid |
+| **Tilemap** | create_tilemap_layer, draw_on_tile, set_tiles, get_tile_at, get_tilemap_info |
+| **Slices** | create_slice, create_nine_patch_slice, set_slice_center/pivot, list_slices, delete_slice, export_slices |
+| **Export** | export_sprite, export_frame, export_tag, export_layers, export_spritesheet, export_frames_separately, copy_sprite, import_image_as_layer |
+| **File Utils** | batch_convert, batch_process_sprites, backup_sprite, restore_sprite, compare_sprites, optimize_file_size, generate_sprite_variations |
 | **System Info** | get_app_info, get_aseprite_info, get_godot_info, get_system_info, resolve_application_path |
-| **Drawing Advanced** | draw_polygon, draw_bezier_curve, draw_gradient, draw_pattern, draw_text, apply_brush_stroke |
-| **Layer** | (basic layer management from original) |
-| **Layer Advanced** | create_layer_group, copy/rename_layer, toggle_visibility, move_to_group, merge_layers, set_blend_mode/opacity |
-| **Cel Operations** | copy/move/clear/link_cel, set_cel_opacity, get/set_tile |
-| **Selection** | select_all, select_rectangle, deselect, invert_selection, delete_selection |
-| **Effects** | apply_blur, adjust_hue_saturation, adjust_brightness_contrast, posterize, pixelate, outline, drop_shadow, invert_colors |
-| **Transform** | flip_horizontal/vertical, rotate_image, crop_sprite, resize_sprite, scale_sprite, expand_canvas, trim_sprite |
-| **Clipboard** | copy/cut/paste_to_clipboard, paste_as_new_layer, merge_layers |
-| **Export** | export_sprite, export_sprite_sheet, export_sprite_sheet_with_json, export_frames_separately, export_layers_separately, export_tileset |
-| **Spritesheet** | export_sprite_sheet_with_json, extract_color_palette_smart, generate_sprite_variations |
-| **Palette** | create_palette, load_palette_from_file, add_color_to_palette, get_palette_colors |
-| **Brush** | list_brushes, create_custom_brush, set_brush_size/angle/pattern |
-| **Tilemap** | create_tileset, create_tilemap_layer, import_tileset_from_image, setup_tileset |
-| **Slices** | list_slices, create_slice, create_nine_patch_slice, export_slices |
-| **File Utils** | batch_convert, batch_process_sprites, backup/restore_sprite, compare_sprites, optimize_file_size, convert_color_mode, get_sprite_info |
-| **AI Features** | auto_color_sprite, upscale_sprite_ai, auto_outline_sprite, auto_cleanup_lineart, suggest_improvements |
+| **Shading** | shade_directional, suggest_shading_ramp, snap_to_palette, detect_antialias_candidates, apply_antialias |
+| **Dithering** | list_dither_patterns, apply_dither_texture, apply_dither_gradient_pattern, apply_floyd_steinberg, sort_sprite_palette |
+| **Escape Hatches** | run_lua_script, start/stop_preview_server, animation_workflow_guide |
 
 ---
 
@@ -304,7 +374,7 @@ Godot x Aseprite MCP/
 └── aseprite-mcp/
     ├── aseprite_mcp/
     │   ├── core/                   # MCP server core, Lua injector, command runner
-    │   ├── tools/                  # 17 Python tool modules
+    │   ├── tools/                  # 31 Python tool modules
     │   └── utils/                  # Lua script templates, constants
     └── tests/
 ```
@@ -334,6 +404,17 @@ Both original projects are MIT licensed. This fork extends both without altering
 
 ---
 
+## Credits
+
+This project merges and extends several open-source MCP servers. See [CREDITS.md](./CREDITS.md) for exactly what came from where.
+
 ## License
 
-MIT — see individual `LICENSE` files in each subdirectory.
+MIT — Copyright (c) 2026 Saudade. See [LICENSE](./LICENSE).
+
+The two merged upstreams keep their own copyright notices in
+`aseprite-mcp/LICENSE` and `Godot-MCP/LICENSE`. The three integrated servers
+are installed from their own projects under their own licences and are not
+redistributed here — see [CREDITS.md](./CREDITS.md).
+
+**Maintainer:** Saudade

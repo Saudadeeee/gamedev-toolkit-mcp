@@ -1,446 +1,221 @@
-"""Image effects for Aseprite MCP"""
+"""Per-cel image effects not covered by Aseprite's native filters.
 
-from aseprite_mcp import mcp
-from aseprite_mcp.core.commands import AsepriteCommand
+Brightness/contrast, HSL, invert, outline and convolution go through
+:mod:`native_fx`, which drives the real engine filters. What is left here are
+effects Aseprite has no command for, implemented pixel-by-pixel: posterize,
+pixelate and drop shadow.
+
+All three target an explicit layer + frame rather than the active cel, and
+normalize the cel to canvas size first so sprite-global coordinates apply.
+"""
+
 import os
 
+from ..core.commands import AsepriteCommand, lua_escape
+from ..core.lua import FIND_LAYER, NORMALIZE_CEL
+from ..core.colors import parse_hex_color
+from .. import mcp
 
-@mcp.tool()
-async def apply_blur(filename: str, radius: int = 1) -> str:
+
+def _resolve_target(layer_name: str, frame_index: int, create: str = "false") -> str:
+    """Lua preamble that activates a layer+frame and normalizes its cel."""
+    safe_layer = lua_escape(layer_name)
+    return f"""
+    {FIND_LAYER}
+    {NORMALIZE_CEL}
+    local spr = app.activeSprite
+    if not spr then print("ERROR:No active sprite") return end
+
+    local idx = {frame_index}
+    if idx < 1 or idx > #spr.frames then print("ERROR:Frame index out of range") return end
+
+    local target = find_layer(spr, "{safe_layer}")
+    if not target then print("ERROR:Layer not found") return end
+    if target.isGroup then print("ERROR:Layer is a group") return end
+
+    local cel = normalize_cel(spr, target, idx, {create})
+    if not cel then print("ERROR:No cel at that layer/frame") return end
+    local img = cel.image
     """
-    Apply blur effect
-
-    Args:
-        filename: Name of the Aseprite file to modify
-        radius: Blur radius in pixels
-
-    Returns:
-        Success or error message
-    """
-    if not os.path.exists(filename):
-        return f"Error: File '{filename}' not found"
-
-    lua_script = f"""
-    local sprite = app.open('{filename}')
-    if not sprite then
-        print("Error: Failed to open sprite")
-        return
-    end
-
-    app.command.ConvolutionMatrix{{
-        -- Simple blur matrix
-    }}
-
-    sprite:saveAs('{filename}')
-    sprite:close()
-    print("Success: Applied blur effect (radius {radius})")
-    """
-
-    success, output = AsepriteCommand.execute_lua_script(lua_script)
-    return output if success else f"Error: {output}"
 
 
 @mcp.tool()
-async def adjust_brightness_contrast(filename: str, brightness: int = 0, contrast: int = 0) -> str:
-    """
-    Adjust brightness and contrast
+async def posterize(filename: str, layer_name: str, frame_index: int = 1, levels: int = 4) -> str:
+    """Reduce each RGB channel to a fixed number of levels (banding effect).
 
     Args:
-        filename: Name of the Aseprite file to modify
-        brightness: Brightness adjustment (-100 to 100)
-        contrast: Contrast adjustment (-100 to 100)
-
-    Returns:
-        Success or error message
+        filename: Aseprite file to modify
+        layer_name: Layer to affect
+        frame_index: Frame index starting at 1
+        levels: Levels per channel, 2-255. Lower means harsher banding.
     """
     if not os.path.exists(filename):
-        return f"Error: File '{filename}' not found"
-
-    lua_script = f"""
-    local sprite = app.open('{filename}')
-    if not sprite then
-        print("Error: Failed to open sprite")
-        return
-    end
-
-    app.command.BrightnessContrast{{
-        brightness={brightness},
-        contrast={contrast}
-    }}
-
-    sprite:saveAs('{filename}')
-    sprite:close()
-    print("Success: Adjusted brightness ({brightness}) and contrast ({contrast})")
-    """
-
-    success, output = AsepriteCommand.execute_lua_script(lua_script)
-    return output if success else f"Error: {output}"
-
-
-@mcp.tool()
-async def adjust_hue_saturation(filename: str, hue: int = 0, saturation: int = 0, lightness: int = 0) -> str:
-    """
-    Adjust HSL (Hue, Saturation, Lightness)
-
-    Args:
-        filename: Name of the Aseprite file to modify
-        hue: Hue shift (-180 to 180)
-        saturation: Saturation adjustment (-100 to 100)
-        lightness: Lightness adjustment (-100 to 100)
-
-    Returns:
-        Success or error message
-    """
-    if not os.path.exists(filename):
-        return f"Error: File '{filename}' not found"
-
-    lua_script = f"""
-    local sprite = app.open('{filename}')
-    if not sprite then
-        print("Error: Failed to open sprite")
-        return
-    end
-
-    app.command.HueSaturation{{
-        hue={hue},
-        saturation={saturation},
-        lightness={lightness}
-    }}
-
-    sprite:saveAs('{filename}')
-    sprite:close()
-    print("Success: Adjusted HSL (H:{hue}, S:{saturation}, L:{lightness})")
-    """
-
-    success, output = AsepriteCommand.execute_lua_script(lua_script)
-    return output if success else f"Error: {output}"
-
-
-@mcp.tool()
-async def invert_colors(filename: str) -> str:
-    """
-    Invert all colors
-
-    Args:
-        filename: Name of the Aseprite file to modify
-
-    Returns:
-        Success or error message
-    """
-    if not os.path.exists(filename):
-        return f"Error: File '{filename}' not found"
-
-    lua_script = f"""
-    local sprite = app.open('{filename}')
-    if not sprite then
-        print("Error: Failed to open sprite")
-        return
-    end
-
-    app.command.InvertColor()
-
-    sprite:saveAs('{filename}')
-    sprite:close()
-    print("Success: Inverted colors")
-    """
-
-    success, output = AsepriteCommand.execute_lua_script(lua_script)
-    return output if success else f"Error: {output}"
-
-
-@mcp.tool()
-async def posterize(filename: str, levels: int = 4) -> str:
-    """
-    Posterize effect (reduce color levels)
-
-    Args:
-        filename: Name of the Aseprite file to modify
-        levels: Number of color levels per channel (2-255)
-
-    Returns:
-        Success or error message
-    """
-    if not os.path.exists(filename):
-        return f"Error: File '{filename}' not found"
-
+        return f"File {filename} not found"
     if levels < 2 or levels > 255:
-        return f"Error: Levels must be 2-255"
+        return "levels must be between 2 and 255"
 
-    lua_script = f"""
-    local sprite = app.open('{filename}')
-    if not sprite then
-        print("Error: Failed to open sprite")
-        return
-    end
+    script = f"""
+    {_resolve_target(layer_name, frame_index)}
 
-    local cel = app.activeCel
-    if not cel then
-        print("Error: No active cel")
-        sprite:close()
-        return
-    end
-
-    local image = cel.image
     local levels = {levels}
+    local step = 255 / (levels - 1)
 
     app.transaction(function()
-        for y = 0, image.height - 1 do
-            for x = 0, image.width - 1 do
-                local pixel = image:getPixel(x, y)
-                local color = Color{{rgbaPixel = pixel}}
-
-                -- Posterize each channel
-                local r = math.floor(color.red / 256 * levels) * math.floor(256 / levels)
-                local g = math.floor(color.green / 256 * levels) * math.floor(256 / levels)
-                local b = math.floor(color.blue / 256 * levels) * math.floor(256 / levels)
-
-                local newColor = Color(r, g, b, color.alpha)
-                image:drawPixel(x, y, newColor.rgbaPixel)
+        for y = 0, img.height - 1 do
+            for x = 0, img.width - 1 do
+                local c = Color(img:getPixel(x, y))
+                if c.alpha > 0 then
+                    local r = math.floor(math.floor(c.red / step + 0.5) * step + 0.5)
+                    local g = math.floor(math.floor(c.green / step + 0.5) * step + 0.5)
+                    local b = math.floor(math.floor(c.blue / step + 0.5) * step + 0.5)
+                    img:drawPixel(x, y, Color(
+                        math.min(255, r), math.min(255, g), math.min(255, b), c.alpha))
+                end
             end
         end
     end)
 
-    sprite:saveAs('{filename}')
-    sprite:close()
-    print("Success: Applied posterize effect ({levels} levels)")
+    spr:saveAs(spr.filename)
+    print("OK")
     """
 
-    success, output = AsepriteCommand.execute_lua_script(lua_script)
-    return output if success else f"Error: {output}"
+    success, output = AsepriteCommand.execute_lua_script_checked(script, filename)
+    if success:
+        return f"Posterized '{layer_name}' frame {frame_index} to {levels} levels in {filename}"
+    return f"Failed to posterize: {output}"
 
 
 @mcp.tool()
-async def pixelate(filename: str, pixel_size: int = 2) -> str:
-    """
-    Pixelate effect (mosaic)
+async def pixelate(filename: str, layer_name: str, frame_index: int = 1, pixel_size: int = 2) -> str:
+    """Snap the cel to a coarser pixel grid (mosaic effect).
+
+    Each block takes the color of its top-left pixel, so the result stays on
+    the original palette instead of introducing averaged in-between colors.
 
     Args:
-        filename: Name of the Aseprite file to modify
-        pixel_size: Size of pixelation blocks
-
-    Returns:
-        Success or error message
+        filename: Aseprite file to modify
+        layer_name: Layer to affect
+        frame_index: Frame index starting at 1
+        pixel_size: Block edge length in pixels, 2 or more
     """
     if not os.path.exists(filename):
-        return f"Error: File '{filename}' not found"
+        return f"File {filename} not found"
+    if pixel_size < 2:
+        return "pixel_size must be 2 or more"
 
-    if pixel_size < 1:
-        return f"Error: Pixel size must be at least 1"
+    script = f"""
+    {_resolve_target(layer_name, frame_index)}
 
-    lua_script = f"""
-    local sprite = app.open('{filename}')
-    if not sprite then
-        print("Error: Failed to open sprite")
-        return
-    end
-
-    local cel = app.activeCel
-    if not cel then
-        print("Error: No active cel")
-        sprite:close()
-        return
-    end
-
-    local image = cel.image
-    local blockSize = {pixel_size}
-    local newImage = Image(image.width, image.height, image.colorMode)
+    local block = {pixel_size}
+    local out = Image(img.width, img.height, img.colorMode)
 
     app.transaction(function()
-        for by = 0, math.floor(image.height / blockSize) do
-            for bx = 0, math.floor(image.width / blockSize) do
-                -- Sample center pixel of block
-                local sx = math.min(bx * blockSize + math.floor(blockSize / 2), image.width - 1)
-                local sy = math.min(by * blockSize + math.floor(blockSize / 2), image.height - 1)
-                local sampleColor = image:getPixel(sx, sy)
+        local by = 0
+        while by < img.height do
+            local bx = 0
+            while bx < img.width do
+                local sample = img:getPixel(bx, by)
+                for y = by, math.min(by + block - 1, img.height - 1) do
+                    for x = bx, math.min(bx + block - 1, img.width - 1) do
+                        out:drawPixel(x, y, sample)
+                    end
+                end
+                bx = bx + block
+            end
+            by = by + block
+        end
+        cel.image = out
+    end)
 
-                -- Fill block with sample color
-                for y = by * blockSize, math.min((by + 1) * blockSize - 1, image.height - 1) do
-                    for x = bx * blockSize, math.min((bx + 1) * blockSize - 1, image.width - 1) do
-                        newImage:drawPixel(x, y, sampleColor)
+    spr:saveAs(spr.filename)
+    print("OK")
+    """
+
+    success, output = AsepriteCommand.execute_lua_script_checked(script, filename)
+    if success:
+        return f"Pixelated '{layer_name}' frame {frame_index} at {pixel_size}px in {filename}"
+    return f"Failed to pixelate: {output}"
+
+
+@mcp.tool()
+async def drop_shadow(
+    filename: str,
+    layer_name: str,
+    frame_index: int = 1,
+    offset_x: int = 2,
+    offset_y: int = 2,
+    color: str = "#00000080",
+    to_layer: str = "",
+) -> str:
+    """Add a hard-edged drop shadow behind the cel's opaque pixels.
+
+    The shadow is a solid silhouette offset by (offset_x, offset_y) — the
+    pixel-art convention, not a blurred gaussian. Shadow pixels that fall
+    outside the canvas are clipped.
+
+    Args:
+        filename: Aseprite file to modify
+        layer_name: Layer to read the silhouette from
+        frame_index: Frame index starting at 1
+        offset_x: Horizontal shadow offset in pixels, may be negative
+        offset_y: Vertical shadow offset in pixels, may be negative
+        color: Shadow color, alpha respected (#RRGGBBAA)
+        to_layer: Existing layer to draw the shadow onto. Leave empty to
+            composite the shadow into the source layer itself.
+    """
+    if not os.path.exists(filename):
+        return f"File {filename} not found"
+    if offset_x == 0 and offset_y == 0:
+        return "offset_x and offset_y cannot both be zero"
+
+    rgba = parse_hex_color(color)
+    if rgba is None:
+        return f"Invalid color value: {color}"
+    r, g, b, a = rgba
+
+    safe_dest = lua_escape(to_layer)
+
+    script = f"""
+    {_resolve_target(layer_name, frame_index)}
+
+    local dest_img = img
+    local dest_cel = cel
+    if "{safe_dest}" ~= "" then
+        local dest_layer = find_layer(spr, "{safe_dest}")
+        if not dest_layer then print("ERROR:Destination layer not found") return end
+        if dest_layer.isGroup then print("ERROR:Destination layer is a group") return end
+        dest_cel = normalize_cel(spr, dest_layer, idx, true)
+        if not dest_cel then print("ERROR:Could not create destination cel") return end
+        dest_img = dest_cel.image
+    end
+
+    local shadow = Color({r}, {g}, {b}, {a})
+    local dx, dy = {offset_x}, {offset_y}
+    local painted = 0
+
+    app.transaction(function()
+        local out = Image(dest_img.width, dest_img.height, dest_img.colorMode)
+        for y = 0, img.height - 1 do
+            for x = 0, img.width - 1 do
+                if Color(img:getPixel(x, y)).alpha > 0 then
+                    local sx, sy = x + dx, y + dy
+                    if sx >= 0 and sy >= 0 and sx < out.width and sy < out.height then
+                        out:drawPixel(sx, sy, shadow)
+                        painted = painted + 1
                     end
                 end
             end
         end
-
-        cel.image = newImage
+        out:drawImage(dest_img, Point(0, 0))
+        dest_cel.image = out
     end)
 
-    sprite:saveAs('{filename}')
-    sprite:close()
-    print("Success: Applied pixelate effect ({pixel_size}x{pixel_size})")
+    spr:saveAs(spr.filename)
+    print("shadow_pixels=" .. painted)
     """
 
-    success, output = AsepriteCommand.execute_lua_script(lua_script)
-    return output if success else f"Error: {output}"
-
-
-@mcp.tool()
-async def outline(filename: str, color: str = "#000000") -> str:
-    """
-    Create outline around sprite
-
-    Args:
-        filename: Name of the Aseprite file to modify
-        color: Outline color (hex)
-
-    Returns:
-        Success or error message
-    """
-    if not os.path.exists(filename):
-        return f"Error: File '{filename}' not found"
-
-    lua_script = f"""
-    local sprite = app.open('{filename}')
-    if not sprite then
-        print("Error: Failed to open sprite")
-        return
-    end
-
-    local cel = app.activeCel
-    if not cel then
-        print("Error: No active cel")
-        sprite:close()
-        return
-    end
-
-    local image = cel.image
-    local outlineColor = Color{{fromString="{color}"}}
-    local newImage = Image(image.width, image.height, image.colorMode)
-
-    -- Copy original
-    newImage:drawImage(image, Point(0, 0))
-
-    app.transaction(function()
-        -- Find edges and draw outline
-        for y = 0, image.height - 1 do
-            for x = 0, image.width - 1 do
-                local pixel = image:getPixel(x, y)
-                local color = Color{{rgbaPixel = pixel}}
-
-                if color.alpha > 0 then
-                    -- Check neighbors
-                    local needsOutline = false
-                    for dy = -1, 1 do
-                        for dx = -1, 1 do
-                            if dx ~= 0 or dy ~= 0 then
-                                local nx, ny = x + dx, y + dy
-                                if nx >= 0 and nx < image.width and ny >= 0 and ny < image.height then
-                                    local nPixel = image:getPixel(nx, ny)
-                                    local nColor = Color{{rgbaPixel = nPixel}}
-                                    if nColor.alpha == 0 then
-                                        needsOutline = true
-                                        break
-                                    end
-                                else
-                                    needsOutline = true
-                                    break
-                                end
-                            end
-                        end
-                        if needsOutline then break end
-                    end
-
-                    if needsOutline then
-                        -- Draw outline around this pixel
-                        for dy = -1, 1 do
-                            for dx = -1, 1 do
-                                local nx, ny = x + dx, y + dy
-                                if nx >= 0 and nx < image.width and ny >= 0 and ny < image.height then
-                                    local nPixel = newImage:getPixel(nx, ny)
-                                    local nColor = Color{{rgbaPixel = nPixel}}
-                                    if nColor.alpha == 0 then
-                                        newImage:drawPixel(nx, ny, outlineColor.rgbaPixel)
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-
-        cel.image = newImage
-    end)
-
-    sprite:saveAs('{filename}')
-    sprite:close()
-    print("Success: Added outline with color {color}")
-    """
-
-    success, output = AsepriteCommand.execute_lua_script(lua_script)
-    return output if success else f"Error: {output}"
-
-
-@mcp.tool()
-async def drop_shadow(filename: str, offset_x: int = 2, offset_y: int = 2, color: str = "#000000", blur: int = 1) -> str:
-    """
-    Add drop shadow effect
-
-    Args:
-        filename: Name of the Aseprite file to modify
-        offset_x: Horizontal shadow offset
-        offset_y: Vertical shadow offset
-        color: Shadow color (hex)
-        blur: Shadow blur amount
-
-    Returns:
-        Success or error message
-    """
-    if not os.path.exists(filename):
-        return f"Error: File '{filename}' not found"
-
-    lua_script = f"""
-    local sprite = app.open('{filename}')
-    if not sprite then
-        print("Error: Failed to open sprite")
-        return
-    end
-
-    local cel = app.activeCel
-    if not cel then
-        print("Error: No active cel")
-        sprite:close()
-        return
-    end
-
-    local image = cel.image
-    local shadowColor = Color{{fromString="{color}"}}
-    local newWidth = image.width + math.abs({offset_x})
-    local newHeight = image.height + math.abs({offset_y})
-    local newImage = Image(newWidth, newHeight, image.colorMode)
-
-    app.transaction(function()
-        -- Draw shadow
-        local shadowX = {offset_x} > 0 and {offset_x} or 0
-        local shadowY = {offset_y} > 0 and {offset_y} or 0
-
-        for y = 0, image.height - 1 do
-            for x = 0, image.width - 1 do
-                local pixel = image:getPixel(x, y)
-                local color = Color{{rgbaPixel = pixel}}
-                if color.alpha > 0 then
-                    local sx = x + shadowX
-                    local sy = y + shadowY
-                    if sx >= 0 and sx < newWidth and sy >= 0 and sy < newHeight then
-                        newImage:drawPixel(sx, sy, shadowColor.rgbaPixel)
-                    end
-                end
-            end
-        end
-
-        -- Draw original on top
-        local origX = {offset_x} < 0 and math.abs({offset_x}) or 0
-        local origY = {offset_y} < 0 and math.abs({offset_y}) or 0
-        newImage:drawImage(image, Point(origX, origY))
-
-        cel.image = newImage
-        cel.position = Point(cel.position.x - origX, cel.position.y - origY)
-    end)
-
-    sprite:saveAs('{filename}')
-    sprite:close()
-    print("Success: Added drop shadow (offset {offset_x},{offset_y})")
-    """
-
-    success, output = AsepriteCommand.execute_lua_script(lua_script)
-    return output if success else f"Error: {output}"
+    success, output = AsepriteCommand.execute_lua_script_checked(script, filename)
+    if success:
+        where = f"'{to_layer}'" if to_layer else f"'{layer_name}'"
+        return f"Drop shadow ({offset_x}, {offset_y}) drawn onto {where} in {filename} ({output.strip()})"
+    return f"Failed to add drop shadow: {output}"

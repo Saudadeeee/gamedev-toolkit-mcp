@@ -121,3 +121,6 @@ tmp/
 temp/
 .cache/
 aseprite-mcp/chessboard.lua
+
+# Third-party MCP servers, installed not vendored (see CREDITS.md)
+vendor/

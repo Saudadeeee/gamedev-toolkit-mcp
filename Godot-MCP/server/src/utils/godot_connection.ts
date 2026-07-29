@@ -39,11 +39,22 @@ export class GodotConnection {
    * @param maxRetries Maximum number of connection retries
    * @param retryDelay Delay between retries in ms
    */
+  /**
+   * @param url WebSocket URL for the Godot server
+   * @param timeout Command timeout in ms
+   * @param maxRetries Maximum number of connection retries
+   * @param retryDelay Delay between retries in ms
+   * @param connectTimeout Per-attempt connection timeout in ms. Kept well
+   *   below the command timeout: the editor is on localhost, so it either
+   *   answers immediately or is not running, and reusing the 20s command
+   *   timeout here turned a closed editor into a ~86s stall.
+   */
   constructor(
     private url: string = 'ws://localhost:9080',
     private timeout: number = 20000,
     private maxRetries: number = 3,
-    private retryDelay: number = 2000
+    private retryDelay: number = 2000,
+    private connectTimeout: number = 4000
   ) {
     console.error('GodotConnection created with URL:', this.url);
   }
@@ -122,7 +133,7 @@ export class GodotConnection {
             }
             reject(new Error('Connection timeout'));
           }
-        }, this.timeout);
+        }, this.connectTimeout);
         
         this.ws.on('open', () => {
           clearTimeout(connectionTimeout);

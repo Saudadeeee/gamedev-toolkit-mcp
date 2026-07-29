@@ -19,6 +19,9 @@ import { tweenTools } from './tools/tween_tools.js';
 import { pathTools } from './tools/path_tools.js';
 import { meshTools } from './tools/mesh_tools.js';
 import { systemInfoTools } from './tools/system_info_tools.js';
+import { signalTools } from './tools/signal_tools.js';
+import { captureTools } from './tools/capture_tools.js';
+import { headlessTools } from './tools/headless_tools.js';
 import { getGodotConnection } from './utils/godot_connection.js';
 
 // Import resources
@@ -98,6 +101,9 @@ async function main() {
     ...pathTools,
     ...meshTools,
     ...systemInfoTools,
+    ...signalTools,
+    ...captureTools,
+    ...headlessTools,
   ].forEach(tool => {
     server.addTool(tool);
   });
@@ -125,23 +131,24 @@ async function main() {
   server.addResource(importSettingsResource);
   server.addResource(materialResource);
 
-  // Try to connect to Godot
-  try {
-    const godot = getGodotConnection();
-    await godot.connect();
-    console.error('Successfully connected to Godot WebSocket server');
-  } catch (error) {
-    const err = error as Error;
-    console.warn(`Could not connect to Godot: ${err.message}`);
-    console.warn('Will retry connection when commands are executed');
-  }
-
-  // Start the server
+  // Start the transport first. The Godot connection is a convenience, not a
+  // prerequisite -- sendCommand reconnects on demand -- and awaiting it here
+  // meant that with the editor closed, no tool was registered until every
+  // retry had expired, long after an MCP client gives up on startup.
   server.start({
     transportType: 'stdio',
   });
 
   console.error('Godot MCP server started');
+
+  // Warm the connection in the background so the first real command is fast.
+  getGodotConnection()
+    .connect()
+    .then(() => console.error('Successfully connected to Godot WebSocket server'))
+    .catch((error) => {
+      console.error(`Could not connect to Godot: ${(error as Error).message}`);
+      console.error('Will retry when a command is executed');
+    });
 
   // Handle cleanup
   const cleanup = () => {

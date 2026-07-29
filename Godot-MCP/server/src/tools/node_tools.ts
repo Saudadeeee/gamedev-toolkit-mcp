@@ -41,6 +41,14 @@ interface ImportAnimatedSpriteParams {
   animation_name?: string;
   fps?: number;
   autoplay?: boolean;
+  use_tags?: boolean;
+}
+
+interface ImportedAnimation {
+  name: string;
+  frame_count: number;
+  direction: string;
+  speed: number;
 }
 
 /**
@@ -202,7 +210,11 @@ export const nodeTools: MCPTool[] = [
 
   {
     name: 'import_animated_sprite',
-    description: 'Create SpriteFrames on an AnimatedSprite2D from an Aseprite spritesheet and JSON metadata',
+    description:
+      'Create SpriteFrames on an AnimatedSprite2D from an Aseprite spritesheet and JSON metadata. ' +
+      'When the metadata carries Aseprite tags (exported with list_tags), one Godot animation is ' +
+      'created per tag, honouring each tag\'s playback direction. Per-frame durations from Aseprite ' +
+      'are preserved; fps is only used as a fallback when the metadata has no durations.',
     parameters: z.object({
       node_path: z.string()
         .describe('Path to the AnimatedSprite2D node'),
@@ -211,11 +223,13 @@ export const nodeTools: MCPTool[] = [
       metadata_path: z.string()
         .describe('Godot resource path to the Aseprite JSON metadata (e.g. "res://assets/player_sheet.json")'),
       animation_name: z.string().default('default')
-        .describe('Animation name to create inside SpriteFrames'),
+        .describe('Animation name to use when the metadata has no tags. Ignored when tags are present.'),
       fps: z.number().default(12)
-        .describe('Animation playback speed in frames per second'),
+        .describe('Fallback playback speed, used only when the metadata carries no per-frame durations'),
       autoplay: z.boolean().default(true)
-        .describe('Whether the imported animation should autoplay'),
+        .describe('Whether the first imported animation should autoplay'),
+      use_tags: z.boolean().default(true)
+        .describe('Create one animation per Aseprite tag. Set false to import every frame as a single animation.'),
     }),
     execute: async ({
       node_path,
@@ -224,6 +238,7 @@ export const nodeTools: MCPTool[] = [
       animation_name = 'default',
       fps = 12,
       autoplay = true,
+      use_tags = true,
     }: ImportAnimatedSpriteParams): Promise<string> => {
       const godot = getGodotConnection();
 
@@ -235,8 +250,21 @@ export const nodeTools: MCPTool[] = [
           animation_name,
           fps,
           autoplay,
+          use_tags,
         });
-        return `Imported ${result.frame_count} frames into ${node_path} as animation "${animation_name}"`;
+
+        const animations = (result.animations ?? []) as ImportedAnimation[];
+        if (animations.length > 1) {
+          const summary = animations
+            .map((a) => `${a.name} (${a.frame_count} frames, ${a.speed.toFixed(1)} fps, ${a.direction})`)
+            .join(', ');
+          return `Imported ${result.frame_count} frames into ${node_path} as ${animations.length} animations: ${summary}`;
+        }
+
+        const only = animations[0];
+        const name = only?.name ?? animation_name;
+        const speed = only ? `, ${only.speed.toFixed(1)} fps` : '';
+        return `Imported ${result.frame_count} frames into ${node_path} as animation "${name}"${speed}`;
       } catch (error) {
         throw new Error(`Failed to import animated sprite: ${(error as Error).message}`);
       }

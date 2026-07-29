@@ -1,14 +1,16 @@
 {
   "name": "godot-mcp-server",
   "version": "1.0.0",
-  "description": "Godot MCP Server using FastMCP",
+  "description": "Godot 4 MCP server -- scenes, nodes, scripts, signals, capture and headless builds",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "nodemon --watch src --exec \"tsc && node dist/index.js\"",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Pass a project path: npm run test:headless -- <project>\" && exit 1",
+    "test:headless": "node tests/headless_test.mjs",
+    "test:editor": "node tests/editor_test.mjs"
   },
   "keywords": [
     "godot",
@@ -17,7 +19,7 @@
     "claude",
     "ai"
   ],
-  "author": "",
+  "author": "Saudade",
   "license": "MIT",
   "dependencies": {
     "fastmcp": "^1.20.4",
@@ -30,5 +32,9 @@
     "@types/ws": "^8.5.5",
     "nodemon": "^2.0.22",
     "typescript": "^5.1.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Saudadeeee/Godot-x-Aseprite-MCP-all"
   }
 }

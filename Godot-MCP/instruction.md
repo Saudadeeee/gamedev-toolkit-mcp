@@ -189,7 +189,7 @@ The WebSocket server runs on **port 9080** (`addons/godot_mcp/websocket_server.g
 4. **Register in `server/src/index.ts`** — import and spread into the tools array
 5. **Build the server**: `cd server && npm run build`
 6. **Reload the Godot plugin** (disable + re-enable in Project → Plugins, or restart editor)
-7. **Test**: `cd server && node test_integration.cjs`
+7. **Test**: `cd server && node tests/editor_test.mjs <project>`
 
 ---
 
@@ -241,7 +241,7 @@ cd server && npm run start
 cd server && npm run dev
 
 # Run integration tests
-cd server && node test_integration.cjs
+cd server && node tests/editor_test.mjs <path-to-a-godot-project>
 ```
 
 The Godot editor must be running with the plugin enabled before tests can pass.
@@ -250,13 +250,13 @@ The Godot editor must be running with the plugin enabled before tests can pass.
 
 ## Integration Test
 
-`server/test_integration.cjs` connects directly to the Godot WebSocket on port 9080 (bypassing the MCP layer) and tests every command category. It requires:
+`server/tests/editor_test.mjs` connects to the Godot WebSocket on port 9080 and drives a full pipeline: build a scene from an Aseprite spritesheet, wire a signal, group a node, render the result. `server/tests/headless_test.mjs` covers the CLI path and needs no editor. Both require:
 
 1. Godot editor running with the `godot_mcp` plugin enabled
 2. The test scene `res://test_mcp_full.tscn` present in the project
 3. Port 9080 accessible
 
-Run it with: `node server/test_integration.cjs`
+Run them with: `node server/tests/editor_test.mjs <project>` and `node server/tests/headless_test.mjs <project>`
 
 If commands time out and the WebSocket stops responding after a test run, the Godot editor needs to be restarted — this usually means a GDScript runtime error crashed the plugin's `_process()` loop.
 

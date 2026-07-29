@@ -1,846 +1,188 @@
-# Hướng Dẫn Sử Dụng Aseprite MCP Server
+# Aseprite MCP — Internal Guide
 
-## Tổng Quan Dự Án
+Architecture and maintenance notes. For installation and the tool catalogue, see [README.md](README.md). For using the tools to make art, see the skills under [`.claude/skills/`](../.claude/skills/).
 
-**Aseprite MCP** là một MCP (Model Context Protocol) server cho phép các AI assistant tương tác và điều khiển Aseprite thông qua các lệnh lập trình. Project sử dụng Python 3.13 và FastMCP để triển khai server.
+---
 
-### Cấu Trúc Thư Mục
+## Architecture
+
+The server does not talk to Aseprite through an API. Each tool builds a Lua script, writes it to a temp file, and runs:
 
 ```
-aseprite-mcp/
-├── aseprite_mcp/              # Package Python chính
-│   ├── __init__.py            # Khởi tạo MCP server
-│   ├── __main__.py            # Entry point để chạy server
-│   ├── core/                  # Chức năng cốt lõi
-│   │   ├── __init__.py
-│   │   └── commands.py        # Wrapper để thực thi lệnh Aseprite
-│   └── tools/                 # Triển khai các MCP tools
-│       ├── __init__.py
-│       ├── canvas.py          # Quản lý canvas và layer cơ bản
-│       ├── drawing.py         # Công cụ vẽ
-│       ├── export.py          # Chức năng xuất file
-│       ├── layer_advanced.py  # Layer operations nâng cao
-│       ├── palette.py         # Color & palette management
-│       └── selection.py       # Selection operations
-├── scripts/                   # Scripts tiện ích
-│   ├── docker-entrypoint.sh
-│   └── install-aseprite-steam.sh
-├── tests/                     # Thư mục test
-├── Dockerfile                 # Docker image definition
-├── docker-compose.yml         # Docker Compose config
-├── pyproject.toml             # Cấu hình project Python
-├── requirements.txt           # Dependencies bổ sung
-└── sample.env                 # Template biến môi trường
+aseprite --batch <sprite> --script <tmp.lua>
 ```
 
----
+The sprite passed to `--batch` becomes `app.activeSprite` inside the script. Tools finish by calling `spr:saveAs(spr.filename)`.
 
-## 1. Core Module (`aseprite_mcp/core/commands.py`)
+```
+aseprite_mcp/
+├── __init__.py          # FastMCP instance
+├── __main__.py          # stdio entrypoint
+├── core/
+│   ├── commands.py      # process runner, Lua escaping, traversal guard
+│   ├── path_resolver.py # Aseprite + Godot executable discovery
+│   ├── lua.py           # shared Lua snippets
+│   ├── colors.py        # hex colour parsing
+│   ├── color_space.py   # CIELAB, perceptual matching, palette ordering
+│   ├── dither.py        # dither matrices and texture stencils
+│   └── native.py        # wrapper for app.command.* engine filters
+├── tools/               # 33 modules; each @mcp.tool() is one MCP tool
+└── utils/               # Lua templates, constants, validators
+```
 
-### Class: `AsepriteCommand`
-
-Helper class để thực thi các lệnh Aseprite thông qua subprocess.
-
-#### Phương thức:
-
-#### 1.1. `run_command(args: list) -> tuple[bool, str]`
-
-**Mô tả:** Chạy lệnh Aseprite với xử lý lỗi.
-
-**Tham số:**
-- `args` (list): Danh sách các tham số dòng lệnh
-
-**Trả về:**
-- `tuple[bool, str]`: (success, output)
-
-**Sử dụng:**
-- Sử dụng biến môi trường `ASEPRITE_PATH` hoặc mặc định 'aseprite'
-- Thực thi trong batch mode
-- Bắt lỗi subprocess và xử lý encoding
+Adding a tool means adding an `@mcp.tool()` function to a module in `tools/`, then importing that module in `tools/__init__.py`.
 
 ---
 
-#### 1.2. `execute_lua_script(script_content: str, filename: str = None) -> tuple[bool, str]`
+## Three rules for writing a tool
 
-**Mô tả:** Thực thi script Lua trong Aseprite.
+Break any one of these and you get a silent bug, not a reported error.
 
-**Tham số:**
-- `script_content` (str): Nội dung script Lua
-- `filename` (str, optional): File Aseprite cần mở trước khi chạy script
+### 1. Signal failure with `ERROR:`, never with `return`
 
-**Trả về:**
-- `tuple[bool, str]`: (success, output)
+Aseprite's batch runner **discards** a top-level `return "message"` and **always exits 0**. A broken script is indistinguishable from a working one.
 
-**Cơ chế hoạt động:**
-1. Tạo file .lua tạm thời với nội dung script
-2. Mở file Aseprite (nếu có)
-3. Chạy trong batch mode
-4. Dọn dẹp file tạm sau khi thực thi
+```lua
+-- WRONG: the caller sees success
+if not spr then return "No active sprite" end
 
----
+-- RIGHT
+if not spr then print("ERROR:No active sprite") return end
+```
 
-## 2. Canvas Tools (`aseprite_mcp/tools/canvas.py`)
+On the Python side call `execute_lua_script_checked` — it scans stdout for the `ERROR:` line — not `execute_lua_script`.
 
-### 2.1. `create_canvas(width: int, height: int, filename: str = "canvas.aseprite") -> str`
-
-**Mô tả:** Tạo canvas Aseprite mới với kích thước được chỉ định.
-
-**Tham số:**
-- `width` (int): Chiều rộng canvas (pixels)
-- `height` (int): Chiều cao canvas (pixels)
-- `filename` (str): Tên file đầu ra (mặc định: "canvas.aseprite")
-
-**Trả về:**
-- `str`: Thông báo thành công hoặc lỗi
-
-**Ví dụ:**
 ```python
-create_canvas(800, 600, "my_art.aseprite")
+success, output = AsepriteCommand.execute_lua_script_checked(script, filename)
+if success:
+    return f"Done: {filename}"
+return f"Failed to do the thing: {output}"
 ```
 
----
+### 2. Escape every interpolated string
 
-### 2.2. `add_layer(filename: str, layer_name: str) -> str`
+Filenames and layer names are user input. Unescaped, they break out of the Lua string literal and run arbitrary code.
 
-**Mô tả:** Thêm layer mới vào file Aseprite đã tồn tại.
-
-**Tham số:**
-- `filename` (str): Tên file Aseprite cần chỉnh sửa
-- `layer_name` (str): Tên của layer mới
-
-**Trả về:**
-- `str`: Thông báo thành công hoặc lỗi
-
-**Đặc điểm:**
-- Kiểm tra file tồn tại trước khi thực thi
-- Sử dụng transaction để đảm bảo tính nguyên tử
-- Tự động lưu file sau khi chỉnh sửa
-
-**Ví dụ:**
 ```python
-add_layer("my_art.aseprite", "Background")
+from ..core.commands import lua_escape, reject_traversal
+
+safe_layer = lua_escape(layer_name)          # for use inside an f-string of Lua
+error = reject_traversal(output_path)        # blocks ../ per path component
+if error:
+    return error
 ```
+
+Numbers interpolate directly (the signature already coerces to `int`/`float`). Colours go through `parse_hex_color`, which accepts `#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA` and returns `(r, g, b, a)`.
+
+Never use `Color{fromString="#RRGGBBAA"}`. Aseprite only parses 6 hex digits; given 8 it returns **transparent black with no error**. Always pass channels numerically: `Color(r, g, b, a)`.
+
+### 3. Normalize the cel before using sprite coordinates
+
+`cel.image:putPixel(x, y)` works in **cel-local** space. Once a cel has been moved, drawing at (10, 10) lands somewhere else.
+
+```lua
+local cel = normalize_cel(spr, layer, frame, true)  -- canvas-sized image anchored at (0,0)
+local img = cel.image
+```
+
+After that, every coordinate is sprite-global.
 
 ---
 
-### 2.3. `add_frame(filename: str) -> str`
+## Shared Lua snippets (`core/lua.py`)
 
-**Mô tả:** Thêm frame mới vào file Aseprite (cho animation).
+| Name | Purpose |
+|---|---|
+| `FIND_LAYER` | `find_layer(spr, name)` — breadth-first search into groups, understands `group/child` paths, backtracks correctly when a layer name itself contains `/` |
+| `NORMALIZE_CEL` | `normalize_cel(spr, layer, frame, create)` — see rule 3 |
+| `PSET` | `pset(img, x, y, color)` — bounds-guarded putPixel |
+| `HSL` | `rgb_to_hsl` / `hsl_to_rgb` |
 
-**Tham số:**
-- `filename` (str): Tên file Aseprite cần chỉnh sửa
-
-**Trả về:**
-- `str`: Thông báo thành công hoặc lỗi
-
-**Đặc điểm:**
-- Tạo frame animation mới
-- Tự động lưu file sau khi thêm frame
-
-**Ví dụ:**
-```python
-add_frame("my_animation.aseprite")
-```
+`core/native.py::build_native_command_script` wraps `app.command.*`. The key detail: native commands act on the **active** sprite/layer/frame, not on arguments — so the wrapper activates the target **first** and fails immediately if it cannot be resolved. Without that step, a filter silently hits the wrong layer.
 
 ---
 
-## 3. Drawing Tools (`aseprite_mcp/tools/drawing.py`)
+## Aseprite Lua traps
 
-### 3.1. `draw_pixels(filename: str, pixels: list) -> str`
+Recorded so nobody rediscovers them the hard way.
 
-**Mô tả:** Vẽ các pixel riêng lẻ lên canvas.
+**Closing a source sprite kills images derived from it.** When opening a second sprite to read pixels, `close()` it **after** the read loop, not before. Close it first and Aseprite crashes with an empty stderr.
 
-**Tham số:**
-- `filename` (str): Tên file Aseprite cần chỉnh sửa
-- `pixels` (list): Danh sách dict với các key:
-  - `x` (int): Tọa độ X
-  - `y` (int): Tọa độ Y
-  - `color` (str): Mã màu hex (vd: "#FF0000")
-
-**Trả về:**
-- `str`: Thông báo thành công hoặc lỗi
-
-**Cơ chế:**
-- Chuyển đổi màu hex sang RGB
-- Chỉnh sửa image của cel đang hoạt động
-
-**Ví dụ:**
-```python
-pixels = [
-    {"x": 10, "y": 10, "color": "#FF0000"},
-    {"x": 11, "y": 10, "color": "#00FF00"},
-    {"x": 12, "y": 10, "color": "#0000FF"}
-]
-draw_pixels("canvas.aseprite", pixels)
+```lua
+local pat = Image(src.width, src.height, src.colorMode)
+pat:drawImage(src_cel.image, src_cel.position)
+-- ... read pat here ...
+src:close()   -- last
 ```
+
+**Layer objects are unusable as table keys.** Aseprite hands out a fresh userdata wrapper on each property access, so `set[layer]` never matches the same layer reached through a second traversal. Key on `layer.name` instead.
+
+**An empty palette corrupts the file.** `spr:setPalette(palette)` with `#palette == 0` produces a file that fails to reopen — `Unsupported chunk type 0`, all layers gone. Always check `#palette == 0` first.
+
+**`saveCopyAs` always writes the whole sprite**; it cannot write a single frame. To export per frame, build a throwaway one-frame sprite with `Image:drawSprite(spr, i)` and save that.
+
+**There is no text rendering API.** Aseprite Lua cannot draw text. Do not write a `draw_text` tool.
+
+**Clipboard and selection do not survive across calls.** Each tool call is a separate Aseprite process, so the clipboard dies with it, and the `.aseprite` format does not persist a selection mask. Region operations must take explicit coordinates — see `selection.py`.
 
 ---
 
-### 3.2. `draw_line(filename: str, x1: int, y1: int, x2: int, y2: int, color: str = "#000000", thickness: int = 1) -> str`
+## Executable discovery
 
-**Mô tả:** Vẽ đường thẳng giữa hai điểm.
+Resolution order in `AsepriteCommand.get_aseprite_executable()`:
 
-**Tham số:**
-- `filename` (str): Tên file Aseprite
-- `x1` (int): Tọa độ X điểm bắt đầu
-- `y1` (int): Tọa độ Y điểm bắt đầu
-- `x2` (int): Tọa độ X điểm kết thúc
-- `y2` (int): Tọa độ Y điểm kết thúc
-- `color` (str): Mã màu hex (mặc định: "#000000")
-- `thickness` (int): Độ dày đường (mặc định: 1)
+1. `ASEPRITE_PATH` environment variable — **and the file must exist**; a stale path is skipped rather than raised
+2. `core/path_resolver.py` scans Program Files, Steam, `%LOCALAPPDATA%`, `/Applications`, `$PATH`
+3. Bare `aseprite` as a last resort
 
-**Trả về:**
-- `str`: Thông báo thành công hoặc lỗi
+`.env` is loaded from an absolute path next to `pyproject.toml`, not from the cwd — an MCP server is normally spawned from the client's working directory, so a cwd-relative load finds nothing.
 
-**Ví dụ:**
-```python
-draw_line("canvas.aseprite", 10, 10, 100, 100, "#FF0000", 3)
-```
+When Aseprite cannot be reached, tools return `Cannot run Aseprite at '<path>'`. The server does **not** die.
+
+Inspect with `get_aseprite_info`, `get_godot_info`, `get_app_info`, `get_system_info`.
 
 ---
 
-### 3.3. `draw_rectangle(filename: str, x: int, y: int, width: int, height: int, color: str = "#000000", fill: bool = False) -> str`
+## Running
 
-**Mô tả:** Vẽ hình chữ nhật (viền hoặc tô đầy).
-
-**Tham số:**
-- `filename` (str): Tên file Aseprite
-- `x` (int): Tọa độ X góc trên-trái
-- `y` (int): Tọa độ Y góc trên-trái
-- `width` (int): Chiều rộng hình chữ nhật
-- `height` (int): Chiều cao hình chữ nhật
-- `color` (str): Mã màu hex (mặc định: "#000000")
-- `fill` (bool): Tô đầy hay không (mặc định: False)
-
-**Trả về:**
-- `str`: Thông báo thành công hoặc lỗi
-
-**Ví dụ:**
-```python
-# Vẽ viền
-draw_rectangle("canvas.aseprite", 50, 50, 100, 80, "#0000FF", False)
-
-# Tô đầy
-draw_rectangle("canvas.aseprite", 200, 200, 150, 100, "#FF00FF", True)
-```
-
----
-
-### 3.4. `fill_area(filename: str, x: int, y: int, color: str = "#000000") -> str`
-
-**Mô tả:** Tô màu vùng bằng công cụ paint bucket (flood fill).
-
-**Tham số:**
-- `filename` (str): Tên file Aseprite
-- `x` (int): Tọa độ X điểm bắt đầu tô
-- `y` (int): Tọa độ Y điểm bắt đầu tô
-- `color` (str): Mã màu hex (mặc định: "#000000")
-
-**Trả về:**
-- `str`: Thông báo thành công hoặc lỗi
-
-**Ví dụ:**
-```python
-fill_area("canvas.aseprite", 100, 100, "#FFFF00")
-```
-
----
-
-### 3.5. `draw_circle(filename: str, center_x: int, center_y: int, radius: int, color: str = "#000000", fill: bool = False) -> str`
-
-**Mô tả:** Vẽ hình tròn/ellipse.
-
-**Tham số:**
-- `filename` (str): Tên file Aseprite
-- `center_x` (int): Tọa độ X tâm
-- `center_y` (int): Tọa độ Y tâm
-- `radius` (int): Bán kính (pixels)
-- `color` (str): Mã màu hex (mặc định: "#000000")
-- `fill` (bool): Tô đầy hay không (mặc định: False)
-
-**Trả về:**
-- `str`: Thông báo thành công hoặc lỗi
-
-**Ví dụ:**
-```python
-# Vẽ viền tròn
-draw_circle("canvas.aseprite", 400, 300, 50, "#00FF00", False)
-
-# Vẽ tròn tô đầy
-draw_circle("canvas.aseprite", 200, 150, 75, "#FF0000", True)
-```
-
----
-
-## 4. Export Tools (`aseprite_mcp/tools/export.py`)
-
-### 4.1. `export_sprite(filename: str, output_filename: str, format: str = "png") -> str`
-
-**Mô tả:** Xuất file Aseprite sang các định dạng khác.
-
-**Tham số:**
-- `filename` (str): Tên file Aseprite nguồn
-- `output_filename` (str): Tên file đầu ra
-- `format` (str): Định dạng xuất (mặc định: "png")
-
-**Định dạng hỗ trợ:**
-- `png` - PNG image
-- `gif` - Animated GIF
-- `jpg` / `jpeg` - JPEG image
-- Và các định dạng khác mà Aseprite hỗ trợ
-
-**Đặc điểm:**
-- Tự động thêm extension nếu thiếu
-- Hỗ trợ xuất animation (GIF)
-- Sử dụng lệnh `--save-as` của Aseprite
-
-**Ví dụ:**
-```python
-# Xuất sang PNG
-export_sprite("my_art.aseprite", "output.png", "png")
-
-# Xuất animation sang GIF
-export_sprite("my_animation.aseprite", "animation.gif", "gif")
-```
-
----
-
-## 5. Advanced Layer Operations (`aseprite_mcp/tools/layer_advanced.py`)
-
-### 5.1. `set_layer_opacity(filename: str, layer_name: str, opacity: int) -> str`
-
-**Mô tả:** Đặt độ trong suốt của layer.
-
-**Tham số:**
-- `filename` (str): Tên file Aseprite cần chỉnh sửa
-- `layer_name` (str): Tên layer cần chỉnh sửa
-- `opacity` (int): Độ trong suốt (0-255, 255 = hoàn toàn không trong suốt)
-
-**Trả về:**
-- `str`: Thông báo thành công hoặc lỗi
-
-**Ví dụ:**
-```python
-# Đặt layer semi-transparent
-set_layer_opacity("my_art.aseprite", "Background", 128)
-
-# Đặt layer hoàn toàn trong suốt
-set_layer_opacity("my_art.aseprite", "Watermark", 50)
-```
-
----
-
-### 5.2. `set_layer_blend_mode(filename: str, layer_name: str, blend_mode: str) -> str`
-
-**Mô tả:** Đặt blend mode của layer.
-
-**Tham số:**
-- `filename` (str): Tên file Aseprite
-- `layer_name` (str): Tên layer
-- `blend_mode` (str): Blend mode
-
-**Blend modes hỗ trợ:**
-- `normal` - Normal blending
-- `multiply` - Multiply
-- `screen` - Screen
-- `overlay` - Overlay
-- `darken` - Darken
-- `lighten` - Lighten
-- `color_dodge` - Color Dodge
-- `color_burn` - Color Burn
-- `hard_light` - Hard Light
-- `soft_light` - Soft Light
-- `difference` - Difference
-- `exclusion` - Exclusion
-- `hue` - Hue
-- `saturation` - Saturation
-- `color` - Color
-- `luminosity` - Luminosity
-- `addition` - Addition
-- `subtract` - Subtract
-- `divide` - Divide
-
-**Ví dụ:**
-```python
-set_layer_blend_mode("composite.aseprite", "Highlights", "screen")
-set_layer_blend_mode("composite.aseprite", "Shadows", "multiply")
-```
-
----
-
-### 5.3. `toggle_layer_visibility(filename: str, layer_name: str, visible: bool) -> str`
-
-**Mô tả:** Ẩn hoặc hiện layer.
-
-**Tham số:**
-- `filename` (str): Tên file Aseprite
-- `layer_name` (str): Tên layer
-- `visible` (bool): True để hiện, False để ẩn
-
-**Ví dụ:**
-```python
-# Ẩn layer
-toggle_layer_visibility("my_art.aseprite", "Sketch", False)
-
-# Hiện layer
-toggle_layer_visibility("my_art.aseprite", "Final", True)
-```
-
----
-
-### 5.4. `create_layer_group(filename: str, group_name: str) -> str`
-
-**Mô tả:** Tạo layer group để tổ chức các layers.
-
-**Tham số:**
-- `filename` (str): Tên file Aseprite
-- `group_name` (str): Tên group mới
-
-**Ví dụ:**
-```python
-create_layer_group("my_art.aseprite", "Character")
-create_layer_group("my_art.aseprite", "Background")
-```
-
----
-
-### 5.5. `move_layer_to_group(filename: str, layer_name: str, group_name: str) -> str`
-
-**Mô tả:** Di chuyển layer vào group.
-
-**Tham số:**
-- `filename` (str): Tên file Aseprite
-- `layer_name` (str): Tên layer cần di chuyển
-- `group_name` (str): Tên group đích
-
-**Ví dụ:**
-```python
-# Move layer vào group
-move_layer_to_group("my_art.aseprite", "Head", "Character")
-move_layer_to_group("my_art.aseprite", "Body", "Character")
-```
-
----
-
-### 5.6. `rename_layer(filename: str, old_name: str, new_name: str) -> str`
-
-**Mô tả:** Đổi tên layer.
-
-**Tham số:**
-- `filename` (str): Tên file Aseprite
-- `old_name` (str): Tên layer hiện tại
-- `new_name` (str): Tên mới cho layer
-
-**Ví dụ:**
-```python
-rename_layer("my_art.aseprite", "Layer 1", "Background")
-```
-
----
-
-## 6. Color & Palette Management (`aseprite_mcp/tools/palette.py`)
-
-### 6.1. `create_palette(filename: str, colors: list) -> str`
-
-**Mô tả:** Tạo palette mới từ danh sách màu hex.
-
-**Tham số:**
-- `filename` (str): Tên file Aseprite
-- `colors` (list): Danh sách màu hex (vd: ["#FF0000", "#00FF00", "#0000FF"])
-
-**Ví dụ:**
-```python
-# Tạo palette 8-bit style
-colors = ["#000000", "#FFFFFF", "#FF0000", "#00FF00", "#0000FF", "#FFFF00"]
-create_palette("pixel_art.aseprite", colors)
-```
-
----
-
-### 6.2. `get_palette_colors(filename: str) -> str`
-
-**Mô tả:** Lấy tất cả màu trong palette hiện tại.
-
-**Tham số:**
-- `filename` (str): Tên file Aseprite
-
-**Trả về:**
-- Danh sách màu hex
-
-**Ví dụ:**
-```python
-colors = get_palette_colors("my_art.aseprite")
-# Output: "Palette colors: #FF0000, #00FF00, #0000FF, ..."
-```
-
----
-
-### 6.3. `add_color_to_palette(filename: str, color: str) -> str`
-
-**Mô tả:** Thêm màu mới vào palette.
-
-**Tham số:**
-- `filename` (str): Tên file Aseprite
-- `color` (str): Màu hex cần thêm (vd: "#FF0000")
-
-**Ví dụ:**
-```python
-add_color_to_palette("pixel_art.aseprite", "#8B4513")
-```
-
----
-
-### 6.4. `replace_color(filename: str, old_color: str, new_color: str) -> str`
-
-**Mô tả:** Thay thế tất cả pixels có màu cũ bằng màu mới trong toàn bộ sprite.
-
-**Tham số:**
-- `filename` (str): Tên file Aseprite
-- `old_color` (str): Màu cần thay thế (hex)
-- `new_color` (str): Màu mới (hex)
-
-**Ví dụ:**
-```python
-# Đổi tất cả màu đỏ thành xanh
-replace_color("my_art.aseprite", "#FF0000", "#00FF00")
-```
-
----
-
-### 6.5. `load_palette_from_file(filename: str, palette_file: str) -> str`
-
-**Mô tả:** Load palette từ file external (.gpl, .ase, .aseprite, .act).
-
-**Tham số:**
-- `filename` (str): Tên file Aseprite cần áp dụng palette
-- `palette_file` (str): Đường dẫn đến file palette
-
-**Ví dụ:**
-```python
-load_palette_from_file("my_art.aseprite", "palettes/retro_8bit.gpl")
-```
-
----
-
-## 7. Selection Operations (`aseprite_mcp/tools/selection.py`)
-
-### 7.1. `select_rectangle(filename: str, x: int, y: int, width: int, height: int) -> str`
-
-**Mô tả:** Tạo selection hình chữ nhật.
-
-**Tham số:**
-- `filename` (str): Tên file Aseprite
-- `x` (int): Tọa độ X góc trên-trái
-- `y` (int): Tọa độ Y góc trên-trái
-- `width` (int): Chiều rộng selection
-- `height` (int): Chiều cao selection
-
-**Ví dụ:**
-```python
-# Select vùng 100x100 tại vị trí (50, 50)
-select_rectangle("my_art.aseprite", 50, 50, 100, 100)
-```
-
----
-
-### 7.2. `select_all(filename: str) -> str`
-
-**Mô tả:** Select toàn bộ canvas.
-
-**Tham số:**
-- `filename` (str): Tên file Aseprite
-
-**Ví dụ:**
-```python
-select_all("my_art.aseprite")
-```
-
----
-
-### 7.3. `deselect(filename: str) -> str`
-
-**Mô tả:** Bỏ tất cả selection.
-
-**Tham số:**
-- `filename` (str): Tên file Aseprite
-
-**Ví dụ:**
-```python
-deselect("my_art.aseprite")
-```
-
----
-
-### 7.4. `invert_selection(filename: str) -> str`
-
-**Mô tả:** Đảo ngược selection (select tất cả trừ vùng đang select).
-
-**Tham số:**
-- `filename` (str): Tên file Aseprite
-
-**Ví dụ:**
-```python
-invert_selection("my_art.aseprite")
-```
-
----
-
-### 7.5. `delete_selection(filename: str) -> str`
-
-**Mô tả:** Xóa nội dung trong vùng selection (clear thành transparent).
-
-**Tham số:**
-- `filename` (str): Tên file Aseprite
-
-**Ví dụ:**
-```python
-# Select rồi delete
-select_rectangle("my_art.aseprite", 10, 10, 50, 50)
-delete_selection("my_art.aseprite")
-```
-
----
-
-## 8. Cấu Hình Môi Trường
-
-### Biến Môi Trường (Environment Variables)
-
-Tạo file `.env` từ `sample.env`:
-
-```bash
-# Đường dẫn đến Aseprite executable
-ASEPRITE_PATH=/path/to/aseprite
-
-# (Optional) Thông tin Steam để cài đặt tự động
-STEAM_USERNAME=your_username
-STEAM_PASSWORD=your_password
-STEAM_GUARD_CODE=your_code
-
-# Cấu hình Steam
-STEAM_APPID=431730
-STEAM_INSTALL_DIR=/opt/steamapps
-```
-
----
-
-## 9. Docker Setup
-
-### 6.1. Build Docker Image
-
-**Linux/macOS:**
-```bash
-./build-docker.sh
-```
-
-**Windows:**
-```powershell
-.\build-docker.ps1
-```
-
-### 6.2. Run với Docker Compose
-
-**Production:**
-```bash
-docker-compose up
-```
-
-**Development:**
-```bash
-docker-compose --profile dev up aseprite-mcp-dev
-```
-
-### 6.3. Dockerfile Chi Tiết
-
-**Base Image:** ghcr.io/homebrew/brew:latest
-**Python Version:** 3.13
-**Package Manager:** uv
-**Additional Tools:** steamcmd
-
-**Tính năng:**
-- Cài đặt Aseprite từ Steam (optional) tại runtime
-- Cấu hình qua biến môi trường
-- Non-root user support
-
----
-
-## 10. Cài Đặt Local
-
-### Yêu Cầu
-- Python >= 3.13
-- Aseprite đã cài đặt
-
-### Các Bước Cài Đặt
-
-1. **Clone repository:**
-```bash
-git clone <repository-url>
-cd aseprite-mcp
-```
-
-2. **Cài đặt uv (nếu chưa có):**
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-3. **Cài đặt dependencies:**
 ```bash
 uv sync
+uv run -m aseprite_mcp                                  # stdio server
+uv run pytest tests/ --ignore=tests/smoke_test.py       # 84 unit tests, no Aseprite needed
+uv run tests/smoke_test.py --clean                      # 53 checks against a real Aseprite
 ```
 
-4. **Chạy server:**
+Two suites, split by what they need:
+
+**`tests/test_core.py` and `tests/test_error_protocol.py`** cover the pure logic —
+colour parsing, Lua escaping, traversal rejection, CIELAB matching, dither
+matrices, wildcard path expansion, and the `ERROR:` protocol itself with the
+subprocess stubbed out. No Aseprite install, so these run in CI. 100% coverage
+on `colors.py`, `color_space.py` and `dither.py`.
+
+**`tests/smoke_test.py`** drives a real Aseprite. It exercises every tool this
+fork added or rewrote, then checks invalid inputs are **rejected with the
+expected message** — not merely "something failed", which would pass while
+proving nothing.
+
+Run both before committing anything under `tools/` or `core/`. CI
+(`.github/workflows/ci.yml`) runs the unit suite, checks for duplicate tool
+names, and verifies the server completes an MCP handshake.
+
+---
+
+## Staying in sync with upstream
+
+This fork merges [diivi/aseprite-mcp](https://github.com/diivi/aseprite-mcp). The boundary is kept visible so re-syncing stays possible:
+
+- **Taken from upstream unmodified:** `canvas`, `drawing`, `export`, `animation`, `layers`, `palette`, `fx`, `native_fx`, `pixel_read`, `analysis`, `quality`, `selection`, `slices`, `tilemap`, `transform`, `scene`, `script`, `preview`, `guide`
+- **This fork's own:** `*_extra`, `transform_sprite`, `drawing_advanced`, `effects`, `cel_operations`, `layer_advanced`, `file_utils`, `ai_features`, `system_info`, `shading`, `dither_tools`, plus `core/color_space.py` and `core/dither.py`
+- **`core/commands.py` is a blend:** the fork's `path_resolver` integration plus upstream's `lua_escape` / `reject_traversal` / `execute_lua_script_checked`
+
+To pull a newer upstream: overwrite the first group, leave the second untouched, then re-run the smoke test and check for duplicate tool names:
+
 ```bash
-uv run -m aseprite_mcp
+uv run python -c "import asyncio,collections;from aseprite_mcp import mcp;import aseprite_mcp.tools;t=[x.name for x in asyncio.run(mcp.list_tools())];print(len(t),[n for n,c in collections.Counter(t).items() if c>1])"
 ```
 
----
-
-## 11. Dependencies
-
-### Core Dependencies (pyproject.toml)
-- `httpx >= 0.28.1`
-- `mcp[cli] >= 1.6.0`
-
-### Development Dependencies (requirements.txt)
-- `typing_extensions >= 4.12.2`
-- `python-dotenv >= 1.0.0`
-- `pytest >= 8.0.0`
-- `black >= 24.0.0`
-- `flake8 >= 7.0.0`
-
----
-
-## 12. Cơ Chế Hoạt Động
-
-### 9.1. MCP Server Implementation
-
-- **Server Name:** "aseprite"
-- **Transport:** stdio (standard input/output)
-- **Framework:** FastMCP
-- **Tools Registration:** Decorator `@mcp.tool()`
-- **Execution Model:** Asynchronous (async functions)
-
-### 9.2. Lua Script Execution
-
-Tất cả các thao tác sử dụng Lua scripts được thực thi trong batch mode của Aseprite:
-
-1. Python tạo Lua script động
-2. Lưu vào file tạm thời
-3. Aseprite chạy script trong batch mode
-4. Dọn dẹp file tạm
-
-### 9.3. Color Handling
-
-- Input: Hex color codes (vd: "#FF0000")
-- Conversion: Hex → RGB trong Python
-- Usage: RGB values trong Lua scripts
-
----
-
-## 13. CI/CD
-
-### GitHub Actions Workflow
-
-**File:** `.github/workflows/docker-build.yml`
-
-**Triggers:**
-- Push to `main` / `develop`
-- Tags: `v*`
-- Pull requests to `main`
-
-**Features:**
-- Multi-platform builds (linux/amd64, linux/arm64)
-- Auto-publish to GitHub Container Registry
-- Build caching
-- Metadata extraction
-
----
-
-## 14. Scripts Tiện Ích
-
-### 11.1. docker-entrypoint.sh
-
-**Chức năng:**
-- Kiểm tra Steam credentials
-- Cài đặt Aseprite qua Steam (optional)
-- Thiết lập ASEPRITE_PATH
-- Khởi chạy MCP server
-
-### 11.2. install-aseprite-steam.sh
-
-**Chức năng:**
-- Cài đặt Aseprite (App ID: 431730) qua SteamCMD
-- Yêu cầu STEAM_USERNAME và STEAM_PASSWORD
-- Hỗ trợ STEAM_GUARD_CODE
-- Validate installation
-- Export ASEPRITE_PATH
-
----
-
-## 15. Các Lưu Ý Kỹ Thuật
-
-### 12.1. Transaction-based Operations
-- Các thao tác layer sử dụng transaction để đảm bảo tính nguyên tử
-- Rollback tự động khi có lỗi
-
-### 12.2. File Validation
-- Kiểm tra file tồn tại trước khi thực hiện thao tác
-- Error handling cho các trường hợp file không hợp lệ
-
-### 12.3. Temporary File Cleanup
-- Tất cả file tạm được dọn dẹp tự động
-- Sử dụng try-finally để đảm bảo cleanup
-
-### 12.4. Batch Mode Execution
-- Aseprite chạy ở background (không GUI)
-- Tối ưu cho automation và scripting
-
----
-
-## 16. Troubleshooting
-
-### Lỗi Thường Gặp
-
-1. **"Aseprite not found"**
-   - Kiểm tra ASEPRITE_PATH
-   - Đảm bảo Aseprite đã cài đặt đúng
-
-2. **"File not found"**
-   - Kiểm tra đường dẫn file
-   - Đảm bảo file .aseprite tồn tại
-
-3. **"Lua script execution failed"**
-   - Kiểm tra syntax Lua script
-   - Xem log output để debug
-
-4. **Docker build failed**
-   - Kiểm tra Docker daemon đang chạy
-   - Kiểm tra disk space
-   - Review build logs
-
----
-
-## 17. Tài Liệu Tham Khảo
-
-- **README.md**: Hướng dẫn tổng quan và quick start
-- **DOCKER.md**: Hướng dẫn Docker chi tiết
-- **DOCKER_SETUP_SUMMARY.md**: Tóm tắt Docker implementation
-- **License**: MIT License
-
----
-
-## 18. Roadmap & Future Features
-
-Các tính năng có thể được thêm vào trong tương lai:
-- Hỗ trợ nhiều loại brush và texture hơn
-- Animation utilities nâng cao
-- Palette management
-- Sprite sheet generation
-- Tích hợp với các AI image generation tools
-- WebSocket transport cho real-time updates
-
----
-
-**Version:** 0.1.0
-**Author:** Aseprite MCP Team
-**License:** MIT
-**Created:** 2026-03-19
+FastMCP keeps whichever tool registered last and says nothing about the collision. That command is what catches it.

@@ -1,143 +1,170 @@
-"""Advanced layer operations for Aseprite MCP"""
+"""Layer-group reparenting and multi-layer merge.
 
-from aseprite_mcp import mcp
-from aseprite_mcp.utils import (
-    validate_opacity, validate_blend_mode, validate_non_empty_string
-)
-from aseprite_mcp.utils.lua_templates import (
-    layer_operation_template, sprite_operation_template, execute_lua_with_template
-)
+Rename, delete, duplicate, reorder, blend mode, merge-down and flatten live in
+:mod:`layers`; visibility and opacity live in :mod:`animation`; creating a
+group lives in :mod:`canvas`. What none of them cover is moving an *existing*
+layer into (or out of) a group, and collapsing an arbitrary set of layers into
+one — both added here.
+"""
 
+import os
+from typing import List
 
-@mcp.tool()
-async def set_layer_opacity(filename: str, layer_name: str, opacity: int) -> str:
-    """Set the opacity of a layer (0-255, where 255 is fully opaque)"""
-    validate_opacity(opacity)
-
-    action = f"layer.opacity = {opacity}\nprint('Success: Layer opacity set to {opacity}')"
-    return execute_lua_with_template(layer_operation_template, filename, layer_name, action)
+from ..core.commands import AsepriteCommand, lua_escape
+from ..core.lua import FIND_LAYER
+from .. import mcp
 
 
 @mcp.tool()
-async def set_layer_blend_mode(filename: str, layer_name: str, blend_mode: str) -> str:
-    """Set the blend mode of a layer"""
-    validated_mode = validate_blend_mode(blend_mode)
+async def move_layer_to_group(filename: str, layer_name: str, group_name: str = "") -> str:
+    """Move an existing layer into a group, or back out to the sprite root.
 
-    action = f"""
-    layer.blendMode = BlendMode.{validated_mode.upper()}
-    print('Success: Layer blend mode set to {validated_mode}')
+    Args:
+        filename: Aseprite file to modify
+        layer_name: Layer to reparent
+        group_name: Destination group name; empty string moves the layer to
+            the sprite root
     """
-    return execute_lua_with_template(layer_operation_template, filename, layer_name, action)
+    if not os.path.exists(filename):
+        return f"File {filename} not found"
+    if not layer_name.strip():
+        return "layer_name cannot be empty"
 
+    safe_layer = lua_escape(layer_name)
+    safe_group = lua_escape(group_name)
 
-@mcp.tool()
-async def toggle_layer_visibility(filename: str, layer_name: str, visible: bool) -> str:
-    """Show or hide a layer"""
-    visibility_text = 'visible' if visible else 'hidden'
-    action = f"""
-    layer.isVisible = {'true' if visible else 'false'}
-    print('Success: Layer visibility set to {visibility_text}')
-    """
-    return execute_lua_with_template(layer_operation_template, filename, layer_name, action)
+    script = f"""
+    {FIND_LAYER}
+    local spr = app.activeSprite
+    if not spr then print("ERROR:No active sprite") return end
 
+    local target = find_layer(spr, "{safe_layer}")
+    if not target then print("ERROR:Layer not found") return end
 
-@mcp.tool()
-async def create_layer_group(filename: str, group_name: str) -> str:
-    """Create a layer group to organize layers"""
-    validate_non_empty_string(group_name, "Group name")
-
-    operation = f"""
-    -- Check if group already exists
-    for _, l in ipairs(sprite.layers) do
-        if l.name == '{group_name}' and l.isGroup then
-            print("Error: Layer group '{group_name}' already exists")
-            sprite:close()
-            return
+    local parent = spr
+    if "{safe_group}" ~= "" then
+        local group = find_layer(spr, "{safe_group}")
+        if not group then print("ERROR:Group not found") return end
+        if not group.isGroup then print("ERROR:Destination is not a group") return end
+        local walk = group
+        while walk do
+            if walk == target then print("ERROR:Cannot move a group into itself") return end
+            walk = walk.parent
+            if walk == spr then break end
         end
+        parent = group
     end
 
     app.transaction(function()
-        local group = sprite:newGroup()
-        group.name = '{group_name}'
+        target.parent = parent
     end)
 
-    print("Success: Layer group '{group_name}' created")
+    spr:saveAs(spr.filename)
+    print("OK")
     """
-    return execute_lua_with_template(sprite_operation_template, filename, operation)
+
+    success, output = AsepriteCommand.execute_lua_script_checked(script, filename)
+    if success:
+        destination = f"group '{group_name}'" if group_name else "the sprite root"
+        return f"Moved layer '{layer_name}' to {destination} in {filename}"
+    return f"Failed to move layer: {output}"
 
 
 @mcp.tool()
-async def move_layer_to_group(filename: str, layer_name: str, group_name: str) -> str:
-    """Move a layer into a group"""
-    validate_non_empty_string(layer_name, "Layer name")
-    validate_non_empty_string(group_name, "Group name")
+async def merge_layers(filename: str, layer_names: List[str], result_name: str = "") -> str:
+    """Flatten several layers into one, bottom-up, across every frame.
 
-    operation = f"""
-    local layer = nil
-    local group = nil
+    Layers are composited in their current stacking order — the lowest named
+    layer receives the result and the others are deleted. Use ``merge_layer_down``
+    when only two adjacent layers are involved.
 
-    -- Find layer and group
-    for _, l in ipairs(sprite.layers) do
-        if l.name == '{layer_name}' then
-            layer = l
+    Args:
+        filename: Aseprite file to modify
+        layer_names: At least two layer names to merge
+        result_name: Name for the merged layer; empty keeps the bottom layer's name
+    """
+    if not os.path.exists(filename):
+        return f"File {filename} not found"
+    if not layer_names or len(layer_names) < 2:
+        return "layer_names needs at least 2 entries"
+    if len(set(layer_names)) != len(layer_names):
+        return "layer_names contains duplicates"
+
+    names_lua = ", ".join(f'"{lua_escape(n)}"' for n in layer_names)
+    safe_result = lua_escape(result_name)
+
+    script = f"""
+    {FIND_LAYER}
+    local spr = app.activeSprite
+    if not spr then print("ERROR:No active sprite") return end
+
+    local wanted = {{{names_lua}}}
+    -- Match by name, not by object identity: Aseprite hands out a fresh
+    -- userdata wrapper on each access, so a layer used as a table key never
+    -- matches the same layer reached through a second traversal.
+    local want = {{}}
+    for _, name in ipairs(wanted) do
+        local l = find_layer(spr, name)
+        if not l then print("ERROR:Layer not found: " .. name) return end
+        if l.isGroup then print("ERROR:Cannot merge a group: " .. name) return end
+        want[l.name] = true
+    end
+
+    -- Walk the sprite in stacking order so compositing respects z-order.
+    local ordered = {{}}
+    local function walk(layers)
+        for _, l in ipairs(layers) do
+            if l.isGroup then
+                walk(l.layers)
+            elseif want[l.name] then
+                ordered[#ordered + 1] = l
+                want[l.name] = nil
+            end
         end
-        if l.name == '{group_name}' and l.isGroup then
-            group = l
-        end
     end
+    walk(spr.layers)
+    if #ordered < 2 then print("ERROR:Fewer than 2 mergeable layers resolved") return end
 
-    if not layer then
-        print("Error: Layer '{layer_name}' not found")
-        sprite:close()
-        return
-    end
-
-    if not group then
-        print("Error: Layer group '{group_name}' not found or is not a group")
-        sprite:close()
-        return
-    end
+    local base = ordered[1]
 
     app.transaction(function()
-        layer.parent = group
+        for f = 1, #spr.frames do
+            local acc = Image(spr.width, spr.height, spr.colorMode)
+            for _, l in ipairs(ordered) do
+                local cel = l:cel(f)
+                if cel and l.isVisible then
+                    acc:drawImage(cel.image, cel.position, l.opacity, l.blendMode)
+                end
+            end
+            local base_cel = base:cel(f)
+            if base_cel then
+                base_cel.image = acc
+                base_cel.position = Point(0, 0)
+            else
+                spr:newCel(base, f, acc, Point(0, 0))
+            end
+        end
+
+        base.opacity = 255
+        base.blendMode = BlendMode.NORMAL
+        if "{safe_result}" ~= "" then base.name = "{safe_result}" end
+
+        for i = #ordered, 2, -1 do spr:deleteLayer(ordered[i]) end
     end)
 
-    print("Success: Layer '{layer_name}' moved to group '{group_name}'")
+    spr:saveAs(spr.filename)
+    print("merged=" .. #ordered)
     """
-    return execute_lua_with_template(sprite_operation_template, filename, operation)
 
+    success, output = AsepriteCommand.execute_lua_script_checked(script, filename)
+    if not success:
+        return f"Failed to merge layers: {output}"
 
-@mcp.tool()
-async def rename_layer(filename: str, old_name: str, new_name: str) -> str:
-    """Rename a layer"""
-    validate_non_empty_string(old_name, "Old layer name")
-    validate_non_empty_string(new_name, "New layer name")
-
-    operation = f"""
-    local layer = nil
-    for _, l in ipairs(sprite.layers) do
-        if l.name == '{old_name}' then
-            layer = l
-            break
-        end
-    end
-
-    if not layer then
-        print("Error: Layer '{old_name}' not found")
-        sprite:close()
-        return
-    end
-
-    -- Check if new name already exists
-    for _, l in ipairs(sprite.layers) do
-        if l.name == '{new_name}' then
-            print("Error: Layer '{new_name}' already exists")
-            sprite:close()
-            return
-        end
-    end
-
-    layer.name = '{new_name}'
-    print("Success: Layer renamed from '{old_name}' to '{new_name}'")
-    """
-    return execute_lua_with_template(sprite_operation_template, filename, operation)
+    # Aseprite may prepend warnings to stdout, so pick out our own line
+    # rather than assuming the count is the last thing printed.
+    count = next(
+        (line.split("=", 1)[1] for line in output.splitlines() if line.startswith("merged=")),
+        str(len(layer_names)),
+    )
+    label = result_name or layer_names[0]
+    return f"Merged {count} layers into '{label}' in {filename}"

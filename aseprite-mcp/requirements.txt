@@ -8,20 +8,13 @@
 #   pip install -r requirements.txt
 
 # Core MCP framework
-mcp[cli]>=1.6.0
+mcp[cli]>=1.8.0
 
-# HTTP client (used for AI feature integrations)
-httpx>=0.28.1
-
-# Environment variable management
+# .env loading for ASEPRITE_PATH / GODOT_PATH
 python-dotenv>=1.0.0
 
-# Data validation
-pydantic>=2.0.0
-pydantic-settings>=2.0.0
-
-# Type hints backport
-typing-extensions>=4.12.2
+# Async runtime for the stdio entrypoint
+anyio>=4.0.0
 
 # --- Dev dependencies (optional) ---
 # pytest>=8.0.0
