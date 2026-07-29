@@ -19,16 +19,16 @@ Complete installation guide for `GameDev Toolkit MCP` on Windows, macOS, and Lin
 ### Windows
 
 ```powershell
-git clone https://github.com/Saudadeeee/gamedev-toolkit-mcp.git
-cd gamedev-toolkit-mcp
+git clone https://github.com/Saudadeeee/Godot-x-Aseprite-MCP-all.git
+cd Godot-x-Aseprite-MCP-all
 .\setup.ps1
 ```
 
 ### macOS / Linux
 
 ```bash
-git clone https://github.com/Saudadeeee/gamedev-toolkit-mcp.git
-cd gamedev-toolkit-mcp
+git clone https://github.com/Saudadeeee/Godot-x-Aseprite-MCP-all.git
+cd Godot-x-Aseprite-MCP-all
 chmod +x setup.sh
 ./setup.sh
 ```
@@ -48,8 +48,8 @@ The setup script does five things:
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/Saudadeeee/gamedev-toolkit-mcp.git
-cd gamedev-toolkit-mcp
+git clone https://github.com/Saudadeeee/Godot-x-Aseprite-MCP-all.git
+cd Godot-x-Aseprite-MCP-all
 ```
 
 ### 2. Install the `aseprite` server

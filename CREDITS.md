@@ -1,6 +1,6 @@
 # Credits
 
-**Maintainer:** Saudade — [gamedev-toolkit-mcp](https://github.com/Saudadeeee/gamedev-toolkit-mcp)
+**Maintainer:** Saudade — [Godot-x-Aseprite-MCP-all](https://github.com/Saudadeeee/Godot-x-Aseprite-MCP-all)
 
 This project is a merge and extension of several open-source MCP servers. This
 file records what came from where, so the attribution is specific rather than a

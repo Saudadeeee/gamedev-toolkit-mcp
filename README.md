@@ -160,8 +160,8 @@ Upstream contributes the animation engine (eased tweens, tags, onion skin), pixe
 
 ```bash
 # Clone
-git clone https://github.com/Saudadeeee/gamedev-toolkit-mcp.git
-cd gamedev-toolkit-mcp
+git clone https://github.com/Saudadeeee/Godot-x-Aseprite-MCP-all.git
+cd Godot-x-Aseprite-MCP-all
 
 # Windows
 .\setup.ps1
