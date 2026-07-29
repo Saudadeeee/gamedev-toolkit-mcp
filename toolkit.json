@@ -59,7 +59,13 @@
       "secretEnv": ["OBSIDIAN_API_KEY"],
       "requiresApp": true,
       "appSetup": "Install the \"Local REST API\" community plugin in Obsidian, then run scripts/configure_obsidian.py to copy its key into mcp_config.json.",
-      "bridge": { "kind": "http", "port": 27123, "endpoint": "/" }
+      "bridge": {
+        "kind": "http",
+        "port": 27123,
+        "endpoint": "/",
+        "expect": "\"status\": \"OK\"",
+        "$comment": "Obsidian's Local REST API is not an MCP server -- the stdio server talks to it. Probing it for a JSON-RPC reply reported a running bridge as absent, so `expect` names a marker to look for in a plain GET instead."
+      }
     },
 
     "aseprite": {

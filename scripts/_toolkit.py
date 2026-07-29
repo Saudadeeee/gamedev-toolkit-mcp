@@ -205,6 +205,40 @@ def speaks_mcp(port: int, endpoint: str, timeout: float = 1.5) -> bool:
         return False
 
 
+def http_body_contains(port: int, endpoint: str, needle: str, timeout: float = 1.5) -> bool:
+    """GET the endpoint and look for a marker in the body.
+
+    For bridges that speak plain REST rather than MCP. Obsidian's Local REST API
+    is one: the stdio server talks to it, but it answers ordinary JSON, so
+    probing it for a JSON-RPC reply reports a healthy bridge as absent.
+    """
+    request = urllib.request.Request(f"http://127.0.0.1:{port}{endpoint}", method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return needle in response.read(2048).decode("utf-8", "replace")
+    except urllib.error.HTTPError as error:
+        try:
+            return needle in error.read(2048).decode("utf-8", "replace")
+        except OSError:
+            return False
+    except (OSError, ValueError):
+        return False
+
+
+def bridge_answers(spec: dict, port: int) -> bool:
+    """Whether an HTTP bridge on this port is the thing the registry expects.
+
+    `bridge.expect` names a marker to look for in a plain GET; without it the
+    bridge is assumed to speak MCP over HTTP and is probed with a JSON-RPC ping.
+    """
+    bridge = spec.get("bridge") or {}
+    endpoint = bridge.get("endpoint", "/")
+    expect = bridge.get("expect")
+    if expect:
+        return http_body_contains(port, endpoint, expect)
+    return speaks_mcp(port, endpoint)
+
+
 def resolve_bridge_port(spec: dict) -> int | None:
     """The port a bridge is actually on, preferring one that answers MCP.
 
@@ -214,9 +248,8 @@ def resolve_bridge_port(spec: dict) -> int | None:
     bridge = spec.get("bridge") or {}
     default = bridge.get("port")
     candidates = bridge.get("portCandidates") or ([default] if default else [])
-    endpoint = bridge.get("endpoint", "/")
     for port in candidates:
-        if port_open(port) and speaks_mcp(port, endpoint):
+        if port_open(port) and bridge_answers(spec, port):
             return port
     return default
 

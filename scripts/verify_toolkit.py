@@ -22,9 +22,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from _mcp_probe import audacity_pipes_live, mcp_handshake
-from _toolkit import (BAD, CONFIG, OK, ROOT, SKIP, TODO, detect_applications, heading,
-                      load_registry, paint, port_open, server_dir, speaks_mcp,
-                      venv_can_import, which, working_venv_script)
+from _toolkit import (BAD, CONFIG, OK, ROOT, SKIP, TODO, bridge_answers,
+                      detect_applications, heading, load_registry, paint, port_open,
+                      server_dir, venv_can_import, which, working_venv_script)
 
 ASEPRITE_MCP = ROOT / "servers" / "aseprite"
 GODOT_SERVER = ROOT / "servers" / "godot" / "server"
@@ -199,10 +199,13 @@ def check_bridges(report: Report) -> None:
             candidates = bridge.get("portCandidates") or [bridge.get("port")]
             endpoint = bridge.get("endpoint", "/")
             found = next((p for p in candidates
-                          if p and port_open(p) and speaks_mcp(p, endpoint)), None)
+                          if p and port_open(p) and bridge_answers(spec, p)), None)
+            # "no MCP server" would be wrong for a REST bridge like Obsidian's,
+            # which the stdio server talks to but which speaks no MCP itself.
+            missing = "no MCP server" if not bridge.get("expect") else "not answering"
             report.add(label, OK if found else SKIP,
                        f"serving http://localhost:{found}{endpoint}" if found
-                       else f"no MCP server on {candidates}")
+                       else f"{missing} on {candidates}")
         elif kind == "tcp":
             port = bridge.get("port")
             live = port_open(port)
