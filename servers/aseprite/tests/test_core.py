@@ -327,6 +327,13 @@ class TestSteamDiscovery:
     of the official downloads. Guessing at either loses a real install.
     """
 
+    # The relative paths in tool_registry are per-platform: steam_windows uses
+    # backslashes, steam_linux and steam_darwin use forward slashes. Hardcoding
+    # the Windows spelling here passed on Windows and failed everywhere else,
+    # because the fixture builds its directories with the native separator and
+    # the literal backslash became part of the filename.
+    GODOT_STEAM_RELATIVE = os.path.join("Godot Engine", "godot.windows.opt.tools.64.exe")
+
     @pytest.fixture
     def steam(self, tmp_path):
         client = tmp_path / "Games" / "Steam"
@@ -378,7 +385,7 @@ class TestSteamDiscovery:
         client, _ = steam
         monkeypatch.setattr(path_resolver, "_steam_registry_roots", lambda: [str(client)])
 
-        candidates = path_resolver._steam_app_candidates(r"Godot Engine\godot.windows.opt.tools.64.exe")
+        candidates = path_resolver._steam_app_candidates(self.GODOT_STEAM_RELATIVE)
         assert any(os.path.exists(c) for c in candidates), candidates
 
     def test_finds_the_steam_named_godot_binary(self, steam, monkeypatch):
@@ -388,9 +395,7 @@ class TestSteamDiscovery:
         monkeypatch.setattr(path_resolver, "_steam_registry_roots", lambda: [str(client)])
 
         found = _first_existing(
-            path_resolver._steam_app_candidates(
-                r"Godot Engine\godot.windows.opt.tools.64.exe"
-            )
+            path_resolver._steam_app_candidates(self.GODOT_STEAM_RELATIVE)
         )
         assert found is not None
         assert found.endswith("godot.windows.opt.tools.64.exe")
