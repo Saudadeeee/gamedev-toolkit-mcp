@@ -26,7 +26,7 @@ import sys
 from pathlib import Path
 
 from _toolkit import (BAD, OK, ROOT, SKIP, heading, load_registry, paint,
-                      working_venv_script, which)
+                      venv_can_import, working_venv_script, which)
 
 
 def run(cmd: list[str], cwd: Path, timeout: int = 900) -> tuple[bool, str]:
@@ -71,15 +71,26 @@ def install(name: str, spec: dict, *, force: bool, check: bool) -> str:
         return BAD
 
     installed = working_venv_script(target, script_name) if script_name else None
+    module = (spec.get("install") or {}).get("verifyImport")
+
+    # The console script resolving is necessary but not sufficient: the venv's
+    # dependencies can have been re-resolved out from under it. Both have to
+    # hold before an install counts as healthy.
+    importable, import_error = (True, "")
+    if installed and module:
+        importable, import_error = venv_can_import(target, module)
 
     if check:
-        if installed:
+        if installed and importable:
             print(f"  {OK}  {name}  --  {installed}")
             return OK
-        print(f"  {BAD}  {name}  --  venv missing or stale (repo moved?)")
+        if not installed:
+            print(f"  {BAD}  {name}  --  venv missing or stale (repo moved?)")
+        else:
+            print(f"  {BAD}  {name}  --  cannot import {module}: {import_error}")
         return BAD
 
-    if installed and not force:
+    if installed and importable and not force:
         print(f"  {OK}  {name}  --  {installed}")
         return OK
 
@@ -106,6 +117,12 @@ def install(name: str, spec: dict, *, force: bool, check: bool) -> str:
     if script_name and final is None:
         print(f"  {BAD}  {name}  --  installed but `{script_name}` is missing")
         return BAD
+
+    if module:
+        ok, message = venv_can_import(target, module)
+        if not ok:
+            print(f"  {BAD}  {name}  --  installed but cannot import {module}: {message}")
+            return BAD
 
     print(f"  {OK}  {name}  --  {final or target}")
     return OK

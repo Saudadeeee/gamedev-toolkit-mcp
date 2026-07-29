@@ -70,6 +70,40 @@ def working_venv_script(directory: Path, name: str) -> Path | None:
     return script if script and script_is_live(script) else None
 
 
+def venv_python(directory: Path) -> Path | None:
+    """The interpreter inside `directory/.venv`, on either platform layout."""
+    for candidate in (directory / ".venv" / "Scripts" / "python.exe",
+                      directory / ".venv" / "bin" / "python"):
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def venv_can_import(directory: Path, module: str) -> tuple[bool, str]:
+    """Whether a venv can still import the module its server depends on.
+
+    A venv whose console script resolves can still be unusable: any later
+    `uv pip install` into it re-resolves the whole environment, and an unpinned
+    transitive dependency can move to a version the server does not support.
+    That failure is invisible until the server is launched, so check it here.
+    """
+    python = venv_python(directory)
+    if python is None:
+        return False, "no interpreter in .venv"
+    try:
+        proc = subprocess.run(
+            [str(python), "-c", f"import {module}"], capture_output=True,
+            text=True, timeout=120, encoding="utf-8", errors="replace",
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return False, f"import check failed to run: {error}"
+
+    if proc.returncode == 0:
+        return True, ""
+    last = ((proc.stderr or "").strip().splitlines() or ["import failed"])[-1]
+    return False, last[:120]
+
+
 def script_interpreter(script: Path) -> str | None:
     """The interpreter path baked into a console script, if it has one.
 

@@ -185,12 +185,11 @@ Set up a WorldEnvironment with a procedural sky and ambient light.
 
 ## Documentation
 
-Extended documentation is in the `docs/` folder:
-
-- [Getting Started](docs/getting-started.md)
-- [Installation Guide](docs/installation-guide.md)
-- [Command Reference](docs/command-reference.md)
-- [Architecture](docs/architecture.md)
+- [Architecture](docs/architecture.md) — how the TypeScript server and the
+  GDScript plugin talk to each other
+- [DEVELOPING.md](DEVELOPING.md) — working on this server
+- [../../docs/setup.md](../../docs/setup.md) — installation, for the whole toolkit
+- The tool catalogue lives in the [top-level README](../../README.md)
 
 ---
 

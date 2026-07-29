@@ -137,7 +137,7 @@ Detailed guidance lives in [`.claude/skills/`](./.claude/skills/). Load the one 
 
 ## Aseprite Tool Reference
 
-152 tools total. The ones that matter most:
+165 tools total. The ones that matter most:
 
 ### Canvas, layers, frames
 

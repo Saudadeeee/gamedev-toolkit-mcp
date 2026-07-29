@@ -63,7 +63,7 @@ This project is **not** a simple tool addition. It is a ground-up architectural 
 |---|---|---|
 | **Godot Tools** | 16 | 141 |
 | **Aseprite Tools** | 0 | 165 |
-| **Total MCP Tools** | 16 | 306 in-repo (+ Blockbench and Audacity upstream) |
+| **Total MCP Tools** | 16 | 306 first-party, 546 with the vendored servers |
 | **MCP Resources** | None | 10+ resource endpoints |
 | **Godot Connection** | Subprocess spawn per command | Persistent WebSocket bridge via Godot plugin |
 | **Godot Version** | 3.5+ and 4.x | Godot 4.x only |

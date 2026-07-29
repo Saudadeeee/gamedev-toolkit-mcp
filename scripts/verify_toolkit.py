@@ -23,8 +23,8 @@ from pathlib import Path
 
 from _mcp_probe import audacity_pipes_live, mcp_handshake
 from _toolkit import (BAD, CONFIG, OK, ROOT, SKIP, TODO, detect_applications, heading,
-                      load_registry, paint, port_open, server_dir, speaks_mcp, which,
-                      working_venv_script)
+                      load_registry, paint, port_open, server_dir, speaks_mcp,
+                      venv_can_import, which, working_venv_script)
 
 ASEPRITE_MCP = ROOT / "servers" / "aseprite"
 GODOT_SERVER = ROOT / "servers" / "godot" / "server"
@@ -161,6 +161,17 @@ def check_installs(report: Report) -> None:
                 report.manual.append(
                     f"Rebuild it: python scripts/install_vendored.py --force {name}")
                 continue
+
+            # A resolvable console script is not proof the venv still works --
+            # its dependencies can have been re-resolved out from under it.
+            module = (spec.get("install") or {}).get("verifyImport")
+            if module:
+                importable, message = venv_can_import(directory, module)
+                if not importable:
+                    report.add(name, BAD, f"cannot import {module}: {message}")
+                    report.manual.append(
+                        f"Rebuild it: python scripts/install_vendored.py --force {name}")
+                    continue
 
         if name == "godot-mcp" and not (GODOT_SERVER / "dist" / "index.js").exists():
             report.add(name, BAD, "dist/index.js missing -- run npm run build")

@@ -52,6 +52,13 @@ jobs:
                       sys.exit(f"{name}: vendored server is missing its LICENSE file")
                   if spec.get("modified") is None:
                       sys.exit(f"{name}: vendored servers must declare `modified`")
+              # A venv can resolve its console script while its dependencies have
+              # been re-resolved out from under it -- an unpinned transitive dep
+              # moving major version breaks the server invisibly. verifyImport is
+              # what makes install_vendored.py --check able to see that.
+              install = spec.get("install") or {}
+              if install.get("type") == "uv-venv" and not install.get("verifyImport"):
+                  sys.exit(f"{name}: uv-venv servers must declare install.verifyImport")
           print(f"{len(servers)} servers declared, all well-formed")
           PY
 
