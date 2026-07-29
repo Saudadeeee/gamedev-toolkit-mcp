@@ -1,0 +1,9 @@
+{
+	"servers": {
+		"blockbench": {
+			"url": "http://localhost:3000/bb-mcp",
+			"type": "http"
+		}
+	},
+	"inputs": []
+}

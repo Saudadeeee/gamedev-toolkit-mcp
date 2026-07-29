@@ -10,8 +10,10 @@ pixel-art textures. That constraint is the point — it is why models made here
 sit next to Aseprite sprites without looking out of place.
 
 The MCP server runs **inside Blockbench** as a plugin, serving HTTP on
-`localhost:3000/bb-mcp`. Blockbench must be open before any tool answers.
-Check with `get_blockbench_info` on the `aseprite` server.
+`localhost:3000/bb-mcp` — usually. The plugin picks its own port, so 3456 and
+3001 also turn up; `scripts/write_mcp_config.py` probes the candidates listed in
+`toolkit.json` and pins whichever answers. Blockbench must be open before any
+tool answers. Check with `get_blockbench_info` on the `aseprite` server.
 
 ## When to activate
 

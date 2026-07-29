@@ -1,14 +1,15 @@
 # Credits
 
-**Maintainer:** Saudade — [Godot-x-Aseprite-MCP-all](https://github.com/Saudadeeee/Godot-x-Aseprite-MCP-all)
+**Maintainer:** Saudade — [gamedev-toolkit-mcp](https://github.com/Saudadeeee/gamedev-toolkit-mcp)
 
 This project is a merge and extension of several open-source MCP servers. This
 file records what came from where, so the attribution is specific rather than a
 blanket "inspired by".
 
-Two upstreams were **merged** into this repo; two more are **integrated** as
-separate MCP servers without copying their code. The licence of each is noted
-below, and the distinction matters — see the Licence section.
+Two upstreams were **merged** into this repo and heavily extended; three more
+are **vendored** — copied in verbatim, unmodified, each keeping its own licence.
+The licence of each is noted below, and the distinction matters — see the
+Licence section.
 
 ---
 
@@ -51,13 +52,21 @@ Referenced in this project's README as the architectural comparison point.
 
 ---
 
-## Integrated, not vendored
+## Vendored
 
-These run alongside this repo's own two servers. Each is cloned into `vendor/`
-(gitignored) and installed into its own virtualenv — **no source is copied into
-this repo**, so its history and licence surface stay clean. What this repo adds
-is discovery, readiness probing, routing and documentation: see
-`aseprite_mcp/core/tool_registry.py`, `AGENTS.md`, and the skills.
+These run alongside this repo's own two servers. Each is declared in
+[`toolkit.json`](toolkit.json) as `"origin": "vendored"` and lives under
+`servers/`, copied **verbatim** from upstream with its own `LICENSE` intact.
+None of them is modified here. [`COPYRIGHT`](COPYRIGHT) holds the licence
+inventory and the rules; [`docs/setup.md`](docs/setup.md) has the procedure for
+pulling in a newer upstream.
+
+Vendoring GPL-3.0 code is why this project is GPL-3.0 rather than permissive.
+Before the relicense these were cloned into a gitignored `external/` instead.
+
+What this repo adds on top is discovery, readiness probing, routing and
+documentation: see `aseprite_mcp/core/tool_registry.py`, `AGENTS.md`, and the
+skills.
 
 ### [MarkusPfundstein/mcp-obsidian](https://github.com/MarkusPfundstein/mcp-obsidian)
 *Notes and planning via Obsidian · MIT · 15 tools*
@@ -75,12 +84,17 @@ rules, and the Step 0 "read the plan first" convention in `AGENTS.md`.
 *3D modelling via Blockbench · **GPL-3.0***
 
 Runs as a plugin **inside Blockbench**, serving MCP over HTTP on
-`localhost:3000/bb-mcp`. Reached here through `mcp-remote`.
+`localhost:3000/bb-mcp` by default — the plugin picks the port, so the
+candidates in `toolkit.json` get probed. Reached here through `mcp-remote`.
 
-Deliberately not vendored, for two reasons. It is **GPL-3.0** while this repo
-is MIT — copying it in would impose copyleft on the whole distribution. And the
-server only exists inside the Blockbench process, so there is nothing to vendor
-that would run on its own.
+This is the component that set the project's licence. It is **GPL-3.0**, and
+GPL-3.0 code cannot be redistributed under a more permissive licence — so
+vendoring it meant relicensing the whole distribution from MIT to GPL-3.0. See
+[`COPYRIGHT`](COPYRIGHT).
+
+The source is vendored for licence compliance and reference only. The server
+exists inside the Blockbench process, so this repo does not build or launch it;
+the app loads the plugin itself.
 
 What this repo adds: Blockbench executable detection across platforms and
 package managers, a readiness probe that reports whether the plugin is actually
@@ -93,9 +107,14 @@ skill.
 Python + FastMCP over stdio, talking to Audacity through its `mod-script-pipe`
 named pipe. 131 tools plus 9 pipelines.
 
-Not vendored because it is a thin, well-maintained bridge to Audacity's own
-scripting module — a fork would add nothing but maintenance. Requires Audacity
-3.x with `mod-script-pipe` enabled; 4.x is not supported upstream.
+Vendored verbatim, not forked: it is a thin, well-maintained bridge to
+Audacity's own scripting module, so there is nothing here worth diverging on.
+Requires Audacity 3.x with `mod-script-pipe` enabled; 4.x is not supported
+upstream.
+
+Its `mcp` dependency is unpinned upstream but must stay below 2.0 — the server
+imports `mcp.server.fastmcp`, which `mcp` 2.0 removed. `toolkit.json` carries
+that pin for both the runtime and the test environment.
 
 What this repo adds: Audacity executable detection, a readiness probe that
 checks whether the scripting pipes actually exist (the usual reason a call
@@ -165,16 +184,23 @@ Recorded so the omissions read as decisions rather than oversights.
 
 ## Licence
 
-This project is MIT-licensed.
+This project is **GPL-3.0-or-later**. It was MIT through commit `c5f32f4`, and
+became GPL-3.0 when the Blockbench plugin was vendored — see
+[`COPYRIGHT`](COPYRIGHT) for the reasoning and what it means for
+you.
 
-**Merged upstreams** (`diivi/aseprite-mcp`, `ee0pdt/Godot-MCP`) are MIT, and
-their copyright notices are retained in the relevant subdirectories.
+**Forked upstreams** (`diivi/aseprite-mcp`, `ee0pdt/Godot-MCP`) are MIT. Their
+copyright notices are retained in `servers/aseprite/LICENSE` and
+`servers/godot/LICENSE`. MIT permits sublicensing, so this fork ships under
+GPL-3.0 as part of the whole; the original MIT grant on their work is not
+revoked and remains available from upstream.
 
-**Integrated servers** are installed separately and keep their own licences —
-`blockbench-mcp-plugin` is GPL-3.0 and `Audacity-MCP` is Apache-2.0. Nothing
-from either is redistributed here; this repo only configures and documents
-them. Anyone redistributing a bundle that *does* include the Blockbench plugin
-takes on GPL-3.0 obligations for that bundle.
+**Vendored servers** keep their own licences in their own directories —
+`servers/blockbench/` is GPL-3.0, `servers/audacity/` is Apache-2.0,
+`servers/obsidian/` is MIT. All three are one-way compatible into GPL-3.0, which
+is what makes the combination distributable. None of them is modified here.
+
+[`COPYRIGHT`](COPYRIGHT) is the full per-component inventory.
 
 If you are one of the authors above and want the attribution worded
 differently, please open an issue.

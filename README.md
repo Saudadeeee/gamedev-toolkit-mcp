@@ -4,26 +4,28 @@ Five MCP (Model Context Protocol) servers covering the complete game pipeline �
 planning, pixel art, 3D models, audio, and the engine that consumes them —
 driven entirely through natural language.
 
-Two servers are built and maintained here. Three are integrated from upstream:
-cloned into `vendor/` and installed, never copied into this repo's source.
+All five live under [`servers/`](./servers/) and are tracked here: two built and
+maintained in this repo, three vendored verbatim from upstream.
+[`toolkit.json`](./toolkit.json) is the single registry that says which is which —
+setup, config generation and verification all read it, so nothing hardcodes the list.
 
 | Server | Drives | Source | Tools |
 |---|---|---|---|
-| `aseprite` | Aseprite | **this repo** | 165 |
-| `godot-mcp` | Godot 4 | **this repo** | 141 |
-| `blockbench` | Blockbench | [jasonjgardner/blockbench-mcp-plugin](https://github.com/jasonjgardner/blockbench-mcp-plugin) · GPL-3.0 | 94 |
-| `audacity` | Audacity 3.x | [xDarkzx/Audacity-MCP](https://github.com/xDarkzx/Audacity-MCP) · Apache-2.0 | 131 + 9 pipelines |
-| `obsidian` | Obsidian | [MarkusPfundstein/mcp-obsidian](https://github.com/MarkusPfundstein/mcp-obsidian) · MIT | 15 |
+| `aseprite` | Aseprite | **this repo** · MIT | 165 |
+| `godot-mcp` | Godot 4 | **this repo** · MIT | 141 |
+| `blockbench` | Blockbench | vendored — [jasonjgardner/blockbench-mcp-plugin](https://github.com/jasonjgardner/blockbench-mcp-plugin) · GPL-3.0 | 94 |
+| `audacity` | Audacity 3.x | vendored — [xDarkzx/Audacity-MCP](https://github.com/xDarkzx/Audacity-MCP) · Apache-2.0 | 131 + 9 pipelines |
+| `obsidian` | Obsidian | vendored — [MarkusPfundstein/mcp-obsidian](https://github.com/MarkusPfundstein/mcp-obsidian) · MIT | 15 |
 
 `get_toolkit_status` reports which applications are installed and which bridges
-are currently reachable — all three integrated servers need their app running,
-the two local ones mostly do not.
+are currently reachable — all three vendored servers need their app running, the
+two first-party ones mostly do not.
 
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue)](https://python.org)
 [![Node.js 18+](https://img.shields.io/badge/Node.js-18+-green)](https://nodejs.org)
 [![Godot 4.x](https://img.shields.io/badge/Godot-4.x-blue)](https://godotengine.org)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-purple)](https://modelcontextprotocol.io)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue)](LICENSE)
 
 ---
 
@@ -36,11 +38,11 @@ User request
      │
      ▼
 AI reads AGENTS.md
-     ├── plan / design doc / notes     →  obsidian    (15 tools, upstream)
-     ├── sprite / texture / animation  →  aseprite    (165 tools, this repo)
-     ├── 3D model / UV / rig           →  blockbench  (94 tools, upstream plugin)
-     ├── SFX / music / audio cleanup   →  audacity    (131 tools, upstream)
-     └── scene / node / script / build →  godot-mcp   (141 tools, this repo)
+     ├── plan / design doc / notes     →  obsidian    (15 tools, vendored)
+     ├── sprite / texture / animation  →  aseprite    (165 tools, first-party)
+     ├── 3D model / UV / rig           →  blockbench  (94 tools, vendored)
+     ├── SFX / music / audio cleanup   →  audacity    (131 tools, vendored)
+     └── scene / node / script / build →  godot-mcp   (141 tools, first-party)
 ```
 
 **Combined workflow for a complete game element:**
@@ -61,7 +63,7 @@ This project is **not** a simple tool addition. It is a ground-up architectural 
 |---|---|---|
 | **Godot Tools** | 16 | 141 |
 | **Aseprite Tools** | 0 | 165 |
-| **Total MCP Tools** | 16 | 306 in-repo (+ Blockbench and Audacity upstream) |
+| **Total MCP Tools** | 16 | 306 first-party, 546 with the vendored servers |
 | **MCP Resources** | None | 10+ resource endpoints |
 | **Godot Connection** | Subprocess spawn per command | Persistent WebSocket bridge via Godot plugin |
 | **Godot Version** | 3.5+ and 4.x | Godot 4.x only |
@@ -159,72 +161,55 @@ Upstream contributes the animation engine (eased tweens, tags, onion skin), pixe
 **Option A — Automated (recommended):**
 
 ```bash
-# Clone
-git clone https://github.com/Saudadeeee/Godot-x-Aseprite-MCP-all.git
-cd Godot-x-Aseprite-MCP-all
+git clone https://github.com/Saudadeeee/gamedev-toolkit-mcp.git
+cd gamedev-toolkit-mcp
 
-# Windows
-.\setup.ps1
-
-# macOS / Linux
-chmod +x setup.sh && ./setup.sh
+.\setup.ps1                          # Windows
+chmod +x setup.sh && ./setup.sh      # macOS / Linux
 ```
 
-The script checks prerequisites, installs dependencies, builds the server, auto-detects Aseprite, and writes a ready-to-use `mcp_config.json`.
+One script does the lot: checks prerequisites, installs the two first-party
+servers, builds the vendored ones' virtualenvs, auto-detects your applications,
+and writes an `mcp_config.json` covering **all five** servers.
 
-**Option B — Manual:**
+**Option B — Manual**, from the repository root:
 
 ```bash
-# 1. Install Python dependencies (aseprite server)
-cd servers/aseprite && uv sync
+# 1. The aseprite server (Python)
+uv sync --directory servers/aseprite
 
-# 2. Build the Node.js server (godot-mcp)
-cd ../servers/godot/server && npm install && npm run build
+# 2. The godot-mcp server (TypeScript)
+npm --prefix servers/godot/server install
+npm --prefix servers/godot/server run build
 
-# 3. Enable Godot plugin
-#    Copy addons/godot_mcp/ into your Godot 4 project root
-#    Project Settings → Plugins → Godot MCP → Enable
+# 3. The vendored servers -- builds each one's venv from the in-tree source
+python scripts/install_vendored.py
 
-# 4. Configure your MCP client (see section below)
+# 4. The Godot plugin, into your game project
+python scripts/install_godot_plugin.py /path/to/your/godot/project
+
+# 5. Obsidian's key (after installing its Local REST API plugin)
+python scripts/configure_obsidian.py
+
+# 6. Generate mcp_config.json for every server
+python scripts/write_mcp_config.py
 ```
 
-**Option C — the three upstream servers:**
+Blockbench needs no build here — its source is vendored for reference and
+licence compliance, but the plugin is loaded by the app itself:
+`File > Plugins > Load Plugin from URL` →
+`https://jasonjgardner.github.io/blockbench-mcp-plugin/mcp.js`, grant the
+network permission, and leave Blockbench open.
 
-Cloned into `vendor/` (gitignored) and installed into their own virtualenvs, so
-their source never enters this repo's history or licence surface.
+**Check it all:**
 
 ```bash
-mkdir -p vendor && cd vendor
-
-# Audacity (Apache-2.0) -- stdio, over Audacity's scripting pipe
-git clone --depth 1 https://github.com/xDarkzx/Audacity-MCP
-cd Audacity-MCP && uv venv && uv pip install -e . "mcp[cli]>=1.0,<2" && cd ..
-#   The <2 pin matters: mcp 2.0 removed mcp.server.fastmcp, which this server
-#   imports. Its own dependency is unpinned, so a fresh install picks 2.x and
-#   dies at startup with ModuleNotFoundError.
-#   Then in Audacity: Edit > Preferences > Modules > mod-script-pipe = Enabled,
-#   and restart. Audacity 3.x only -- 4.x is not supported upstream.
-
-# Obsidian (MIT) -- stdio, over the Local REST API plugin
-git clone --depth 1 https://github.com/MarkusPfundstein/mcp-obsidian
-cd mcp-obsidian && uv venv && uv pip install -e . "mcp>=1.1,<2" && cd ..
-#   Install the "Local REST API" community plugin in Obsidian, then copy its
-#   API key into OBSIDIAN_API_KEY in mcp_config.json.
-
-# Blockbench (GPL-3.0) -- a plugin inside the app; nothing to install here
-#   1. Blockbench > File > Plugins > Load Plugin from URL
-#   2. https://jasonjgardner.github.io/blockbench-mcp-plugin/mcp.js
-#   3. Grant the network permission it asks for
-#   4. Leave Blockbench open; it serves http://localhost:3000/bb-mcp
-#   The MCP client reaches it through mcp-remote (already in mcp_config.json).
+python scripts/verify_toolkit.py --quick
 ```
 
-The entry point for Audacity-MCP is the console script `audacity-mcp`, not
-`python -m audacity_mcp` — the package has no `__main__.py`.
-
-Verify everything at once with `get_toolkit_status` (on the `aseprite` server).
-It reports which applications were found and which bridges are actually
-reachable, with the fix for each miss.
+Probes every prerequisite, application, install, live bridge and MCP handshake,
+then lists the manual steps still outstanding. `get_toolkit_status` (on the
+`aseprite` server) reports the same state from inside an MCP session.
 
 For full instructions, troubleshooting, and platform-specific notes: **[docs/setup.md](./docs/setup.md)**
 
@@ -232,22 +217,39 @@ For full instructions, troubleshooting, and platform-specific notes: **[docs/set
 
 ## MCP Client Configuration
 
+Do not write this by hand — generate it:
+
+```bash
+python scripts/write_mcp_config.py            # writes mcp_config.json
+python scripts/write_mcp_config.py --print    # preview, write nothing
+```
+
+It resolves every entry in `toolkit.json` against this machine: absolute repo
+paths, the console script inside each virtualenv, detected application paths,
+and the port a live bridge is actually on. Re-running is safe — API keys and
+hand-corrected values already in `mcp_config.json` are carried over rather than
+reset to placeholders.
+
 ```json
 {
   "mcpServers": {
     "aseprite": {
       "command": "uv",
-      "args": ["--directory", "/path/to/servers/aseprite", "run", "-m", "aseprite_mcp"],
-      "env": { "ASEPRITE_PATH": "/path/to/aseprite" }
+      "args": ["--directory", "/abs/path/to/servers/aseprite", "run", "-m", "aseprite_mcp"],
+      "cwd": "/abs/path/to/servers/aseprite",
+      "env": { "ASEPRITE_PATH": "/abs/path/to/aseprite" }
     },
     "godot-mcp": {
       "command": "node",
-      "args": ["/path/to/servers/godot/server/dist/index.js"],
+      "args": ["/abs/path/to/servers/godot/server/dist/index.js"],
       "env": { "MCP_TRANSPORT": "stdio" }
     }
   }
 }
 ```
+
+`mcp_config.json` holds absolute local paths and API keys. It is gitignored —
+keep it that way.
 
 Config file locations:
 - **Claude Desktop — Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
@@ -353,41 +355,75 @@ a GDScript that updates the HUD when the player's stats change.
 
 ```
 gamedev-toolkit-mcp/
+├── toolkit.json                # THE REGISTRY — every server, how it installs,
+│                               #   how it is configured, how it is probed.
+│                               #   Everything below reads it; nothing hardcodes
+│                               #   the server list.
 ├── AGENTS.md                   # AI routing instructions (auto-loaded by Claude)
 ├── CREDITS.md                  # what came from where
-├── setup.sh / setup.ps1        # one-click setup, writes mcp_config.json
+├── LICENSE                     # GPL-3.0, verbatim
+├── COPYRIGHT                   # per-component licence inventory, modification
+│                               #   status, and what the licence asks of you
+├── setup.sh / setup.ps1        # one-click setup; sequences the scripts below
 │
-├── docs/
-│   └── setup.md                # full setup guide with troubleshooting
+├── docs/setup.md               # setup, troubleshooting, updating a vendored server
 │
 ├── .claude/skills/             # task playbooks the assistant loads on demand
 │
-├── servers/                    # the MCP servers built here
-│   ├── aseprite/               # Python — drives Aseprite over Lua batch scripts
+├── servers/                    # every MCP server, all tracked
+│   ├── aseprite/               # first-party · Python — Aseprite over Lua batch
 │   │   ├── aseprite_mcp/
 │   │   │   ├── core/           # command runner, Lua injector, path resolver
 │   │   │   ├── tools/          # tool modules, one per domain
 │   │   │   └── utils/          # shared Lua snippets and constants
 │   │   └── tests/
 │   │
-│   └── godot/                  # TypeScript server + Godot editor plugin
-│       ├── addons/godot_mcp/   # copy into your Godot project
-│       │   ├── commands/       # GDScript command handlers
-│       │   ├── ui/             # editor dock
-│       │   └── utils/          # WebSocket server, connection manager
-│       ├── server/src/
-│       │   ├── tools/          # TypeScript MCP tool modules
-│       │   ├── resources/      # MCP resource endpoints
-│       │   └── utils/          # WebSocket client, Godot CLI wrapper
-│       └── docs/
+│   ├── godot/                  # first-party · TypeScript server + editor plugin
+│   │   ├── addons/godot_mcp/   # installed into your Godot project
+│   │   │   ├── commands/       # GDScript command handlers
+│   │   │   ├── ui/             # editor dock
+│   │   │   └── utils/          # WebSocket server, connection manager
+│   │   ├── server/src/
+│   │   │   ├── tools/          # TypeScript MCP tool modules
+│   │   │   ├── resources/      # MCP resource endpoints
+│   │   │   └── utils/          # WebSocket client, Godot CLI wrapper
+│   │   └── docs/
+│   │
+│   ├── audacity/               # vendored · Apache-2.0 — verbatim upstream
+│   ├── obsidian/               # vendored · MIT        — verbatim upstream
+│   └── blockbench/             # vendored · GPL-3.0    — verbatim upstream
+│                               #   (runs inside the app; not built here)
 │
-├── scripts/
-│   ├── verify_toolkit.py       # one command to check everything
-│   ├── install_godot_plugin.py
-│   └── configure_obsidian.py
-│
-└── vendor/                     # upstream servers, cloned not copied (gitignored)
+└── scripts/
+    ├── _toolkit.py             # shared registry access + probes
+    ├── _mcp_probe.py           # MCP stdio handshake, application bridges
+    ├── install_vendored.py     # build the vendored servers' virtualenvs
+    ├── write_mcp_config.py     # generate mcp_config.json for all five
+    ├── verify_toolkit.py       # one command to check everything
+    ├── install_godot_plugin.py
+    ├── configure_obsidian.py
+    └── ci/                     # checks the GitHub workflow runs
+        ├── test_vendored.py    # the vendored servers' own upstream suites
+        ├── probe_mcp_server.mjs
+        └── gdcheck.py
 ```
+
+### `first-party` vs `vendored`
+
+All five are tracked in the same place. `toolkit.json` records an `origin` per
+server, which decides only **who fixes its bugs** and how an update arrives:
+
+| | `first-party` | `vendored` |
+|---|---|---|
+| Servers | `aseprite`, `godot-mcp` | `audacity`, `obsidian`, `blockbench` |
+| Who fixes bugs | this repo | upstream |
+| How to change it | edit it | send it upstream; see [docs/setup.md](./docs/setup.md#pulling-a-newer-upstream-into-a-vendored-server) |
+| Modified here | yes, extensively | no — verbatim copies |
+
+Until the GPL-3.0 relicense, the upstream servers were cloned into a gitignored
+`external/` to keep GPL code out of an MIT repo. That constraint is gone, and
+with it the two-tier layout. [COPYRIGHT](./COPYRIGHT) records what each
+component is and whether it was modified.
 
 ---
 
@@ -405,24 +441,44 @@ gamedev-toolkit-mcp/
 
 ## Credits
 
-The two servers built here started as forks:
+The two first-party servers started as forks:
 
 | Server | Original Author | Repository | Licence |
 |---|---|---|---|
 | `godot-mcp` | [@ee0pdt](https://github.com/ee0pdt) | [ee0pdt/Godot-MCP](https://github.com/ee0pdt/Godot-MCP) | MIT |
 | `aseprite` | [@diivi](https://github.com/diivi) | [diivi/aseprite-mcp](https://github.com/diivi/aseprite-mcp) | MIT |
 
-The other three are integrated, not vendored — installed from their own
-projects under their own licences. [CREDITS.md](./CREDITS.md) records exactly
-what came from where, including features adapted rather than copied.
+The other three are vendored verbatim, each keeping its own licence:
+
+| Server | Author | Repository | Licence |
+|---|---|---|---|
+| `audacity` | [@xDarkzx](https://github.com/xDarkzx) | [xDarkzx/Audacity-MCP](https://github.com/xDarkzx/Audacity-MCP) | Apache-2.0 |
+| `obsidian` | [@MarkusPfundstein](https://github.com/MarkusPfundstein) | [MarkusPfundstein/mcp-obsidian](https://github.com/MarkusPfundstein/mcp-obsidian) | MIT |
+| `blockbench` | [@jasonjgardner](https://github.com/jasonjgardner) | [jasonjgardner/blockbench-mcp-plugin](https://github.com/jasonjgardner/blockbench-mcp-plugin) | GPL-3.0 |
+
+[CREDITS.md](./CREDITS.md) records exactly what came from where, including
+features adapted rather than copied.
 
 ## License
 
-MIT — Copyright (c) 2026 Saudade. See [LICENSE](./LICENSE).
+**GPL-3.0-or-later** — Copyright (C) 2026 Saudade. See [LICENSE](./LICENSE).
 
-The two merged upstreams keep their own copyright notices in
-`servers/aseprite/LICENSE` and `servers/godot/LICENSE`. The three integrated servers
-are installed from their own projects under their own licences and are not
-redistributed here — see [CREDITS.md](./CREDITS.md).
+This project was MIT through commit `c5f32f4`. It became GPL-3.0 when the
+Blockbench plugin was vendored: GPL-3.0 code cannot be redistributed under a
+more permissive licence, and every other component (MIT, Apache-2.0) flows
+one-way into GPL-3.0.
+
+What that means in practice:
+
+- **Using it changes nothing.** GPL obligations attach to distribution, not use.
+- **Art, audio, models and code it produces are yours.** GPL-3.0 covers the
+  program, not its output. Licence your game however you like.
+- **Forking and distributing** requires releasing your source under GPL-3.0,
+  keeping the notices, and stating what you changed.
+
+Every component keeps its own copyright notice and licence file in its
+directory. [COPYRIGHT](./COPYRIGHT) is the full inventory, and covers the
+details — modification status per component, and the Godot addon you copy into
+your own project.
 
 **Maintainer:** Saudade

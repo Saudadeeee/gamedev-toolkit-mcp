@@ -1,6 +1,6 @@
 # Aseprite MCP — Internal Guide
 
-Architecture and maintenance notes. For installation and the tool catalogue, see [README.md](README.md). For using the tools to make art, see the skills under [`.claude/skills/`](../.claude/skills/).
+Architecture and maintenance notes. For installation and the tool catalogue, see [README.md](README.md). For using the tools to make art, see the skills under [`.claude/skills/`](../../.claude/skills/).
 
 ---
 

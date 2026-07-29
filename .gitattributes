@@ -1,0 +1,53 @@
+# Normalise line endings in the repository regardless of contributor platform.
+# Without this, core.autocrlf is per-machine: a Windows contributor can commit
+# CRLF into setup.sh, and it then fails on Linux and macOS with the shebang
+# unreadable -- `/usr/bin/env: 'bash\r': No such file or directory`.
+
+* text=auto
+
+# Must be LF on disk everywhere, including on Windows checkouts, because they
+# are run by bash (Git Bash, WSL, CI).
+*.sh        text eol=lf
+*.bash      text eol=lf
+
+# PowerShell tolerates both; keep CRLF so it looks native in Windows editors.
+*.ps1       text eol=crlf
+
+# Godot and the toolkit read these as text; pin LF so diffs stay clean.
+*.py        text eol=lf
+*.gd        text eol=lf
+*.ts        text eol=lf
+*.js        text eol=lf
+*.mjs       text eol=lf
+*.json      text eol=lf
+*.md        text eol=lf
+*.toml      text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.cfg       text eol=lf
+*.gdshader  text eol=lf
+
+# Licence texts are redistributed verbatim -- do not let anything rewrite them.
+LICENSE     text eol=lf
+COPYRIGHT   text eol=lf
+
+# Binary: never touch.
+*.png       binary
+*.gif       binary
+*.webp      binary
+*.jpg       binary
+*.ico       binary
+*.aseprite  binary
+*.ase       binary
+*.wav       binary
+*.ogg       binary
+*.mp3       binary
+*.ttf       binary
+*.otf       binary
+*.import    binary
+
+# Lock files stay ordinary text. Marking them -diff would hide exactly the
+# change a reviewer needs to see when a vendored dependency is bumped.
+uv.lock            text eol=lf
+bun.lock           text eol=lf
+package-lock.json  text eol=lf
