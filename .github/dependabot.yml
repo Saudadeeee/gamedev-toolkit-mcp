@@ -14,12 +14,50 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 3
+    ignore:
+      # Deliberate: every Python server imports mcp.server.fastmcp, which mcp
+      # 2.0 removed. The <2 pin in each pyproject is load-bearing; proposing
+      # the major bump (old PR #9) just re-litigates a decided break.
+      - dependency-name: "mcp*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /servers/godot/server
     schedule:
       interval: monthly
     open-pull-requests-limit: 3
+    ignore:
+      # Deliberate: fastmcp 4 is a breaking API rewrite and zod 4 breaks
+      # fastmcp 1.x (old PRs #10/#11 failed the build on both platforms).
+      # Upgrading is a migration project to do together, not a bump.
+      - dependency-name: "fastmcp"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "zod"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: uv
+    directory: /servers/rfxgen
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    ignore:
+      # Deliberate: every Python server imports mcp.server.fastmcp, which mcp
+      # 2.0 removed. The <2 pin in each pyproject is load-bearing; proposing
+      # the major bump (old PR #9) just re-litigates a decided break.
+      - dependency-name: "mcp*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: uv
+    directory: /servers/ffmpeg
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    ignore:
+      # Deliberate: every Python server imports mcp.server.fastmcp, which mcp
+      # 2.0 removed. The <2 pin in each pyproject is load-bearing; proposing
+      # the major bump (old PR #9) just re-litigates a decided break.
+      - dependency-name: "mcp*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
