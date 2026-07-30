@@ -21,7 +21,7 @@ dependencies = [
     # The <2 pin matters: this server imports mcp.server.fastmcp, which mcp
     # 2.0 removed. uv.lock already held 1.x, but the open bound let dependabot
     # propose 2.0 -- the same break the audacity and rfxgen servers pin against.
-    "mcp[cli]>=1.8.0,<2",
+    "mcp[cli]>=1.28.1,<2",
     "python-dotenv>=1.2.2",
     "anyio>=4.14.2",
 ]
