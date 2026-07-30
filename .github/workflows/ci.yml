@@ -84,40 +84,11 @@ jobs:
       - name: Import every tool module
         run: uv run python -c "import aseprite_mcp.tools"
 
+      # The shared probe holds stdin open until both responses arrive. The
+      # obvious inline version (write, close stdin, read) raced server
+      # shutdown on a cold runner and failed as "tools/list failed".
       - name: Verify the server completes an MCP handshake
-        run: |
-          uv run python - <<'PY'
-          import json, subprocess, sys
-
-          proc = subprocess.Popen(
-              [sys.executable, "-m", "aseprite_mcp"],
-              stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-              text=True,
-          )
-          requests = [
-              {"jsonrpc": "2.0", "id": 1, "method": "initialize",
-               "params": {"protocolVersion": "2024-11-05", "capabilities": {},
-                          "clientInfo": {"name": "ci", "version": "0"}}},
-              {"jsonrpc": "2.0", "method": "notifications/initialized"},
-              {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
-          ]
-          out, _ = proc.communicate("\n".join(json.dumps(r) for r in requests) + "\n", timeout=60)
-
-          seen = {}
-          for line in out.splitlines():
-              try:
-                  msg = json.loads(line)
-              except ValueError:
-                  continue
-              if "id" in msg:
-                  seen[msg["id"]] = msg
-
-          if 1 not in seen or "result" not in seen[1]:
-              sys.exit("initialize failed")
-          if 2 not in seen or "result" not in seen[2]:
-              sys.exit("tools/list failed")
-          print(f"handshake OK, {len(seen[2]['result']['tools'])} tools advertised")
-          PY
+        run: python "$GITHUB_WORKSPACE/scripts/checks/probe_stdio_server.py" -- uv run python -m aseprite_mcp
 
   rfxgen-mcp:
     name: rfxgen-mcp (${{ matrix.os }})
@@ -155,39 +126,7 @@ jobs:
         run: uv run python -c "import rfxgen_mcp.tools"
 
       - name: Verify the server completes an MCP handshake
-        run: |
-          uv run python - <<'PY'
-          import json, subprocess, sys
-
-          proc = subprocess.Popen(
-              [sys.executable, "-m", "rfxgen_mcp"],
-              stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-              text=True,
-          )
-          requests = [
-              {"jsonrpc": "2.0", "id": 1, "method": "initialize",
-               "params": {"protocolVersion": "2024-11-05", "capabilities": {},
-                          "clientInfo": {"name": "ci", "version": "0"}}},
-              {"jsonrpc": "2.0", "method": "notifications/initialized"},
-              {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
-          ]
-          out, _ = proc.communicate("\n".join(json.dumps(r) for r in requests) + "\n", timeout=60)
-
-          seen = {}
-          for line in out.splitlines():
-              try:
-                  msg = json.loads(line)
-              except ValueError:
-                  continue
-              if "id" in msg:
-                  seen[msg["id"]] = msg
-
-          if 1 not in seen or "result" not in seen[1]:
-              sys.exit("initialize failed")
-          if 2 not in seen or "result" not in seen[2]:
-              sys.exit("tools/list failed")
-          print(f"handshake OK, {len(seen[2]['result']['tools'])} tools advertised")
-          PY
+        run: python "$GITHUB_WORKSPACE/scripts/checks/probe_stdio_server.py" -- uv run python -m rfxgen_mcp
 
   godot-mcp:
     name: godot-mcp (${{ matrix.os }})
