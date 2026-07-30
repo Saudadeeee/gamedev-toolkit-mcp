@@ -166,9 +166,20 @@ jobs:
       - name: Verify the server completes an MCP handshake
         run: python "$GITHUB_WORKSPACE/scripts/checks/probe_stdio_server.py" -- uv run python -m ffmpeg_mcp
 
-      # GitHub runners ship ffmpeg on both platforms, so the end-to-end suite
-      # can run in CI here -- unlike aseprite/rfxgen, whose applications are
-      # not installable on a runner.
+      # Unlike aseprite/rfxgen, ffmpeg is installable on a runner in seconds,
+      # so this is the one server whose end-to-end suite runs in CI. (Runner
+      # images used to ship ffmpeg preinstalled; they no longer do -- the first
+      # run of this job proved that on both platforms.)
+      - name: Install ffmpeg
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-get update -q
+            sudo apt-get install -y -q --no-install-recommends ffmpeg
+          else
+            choco install ffmpeg -y --no-progress
+          fi
+          ffmpeg -version | head -1
+
       - name: Smoke test against the runner's ffmpeg
         run: uv run tests/smoke_test.py --clean
 
