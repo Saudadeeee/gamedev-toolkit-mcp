@@ -16,7 +16,7 @@ dependencies = [
     # The <2 pin matters: this server imports mcp.server.fastmcp, which mcp
     # 2.0 removed. An open bound resolves to 2.x and dies at import -- the
     # exact failure the audacity server had before upstream pinned it.
-    "mcp[cli]>=1.8.0,<2",
+    "mcp[cli]>=1.28.1,<2",
     "anyio>=4.0.0",
 ]
 
