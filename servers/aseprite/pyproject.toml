@@ -23,7 +23,7 @@ dependencies = [
     # propose 2.0 -- the same break the audacity and rfxgen servers pin against.
     "mcp[cli]>=1.8.0,<2",
     "python-dotenv>=1.2.2",
-    "anyio>=4.0.0",
+    "anyio>=4.14.2",
 ]
 
 [project.optional-dependencies]
