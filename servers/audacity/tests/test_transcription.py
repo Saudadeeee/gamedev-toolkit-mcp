@@ -49,6 +49,53 @@ def registered_tools(mock_client):
     return mcp._tool_manager._tools
 
 
+class TestGetCacheDir:
+    # Regression: the manual pre-download command from the setup docs uses
+    # huggingface_hub's own default resolution (which honors HF_HOME /
+    # HUGGINGFACE_HUB_CACHE), but this project's own cache lookup used to
+    # hardcode ~/.cache/huggingface/hub unconditionally - so a user with
+    # either variable set (common when redirecting model caches to a
+    # different drive) would have the pre-downloaded model in one place and
+    # the running server looking in another, forever re-downloading.
+
+    def test_honors_huggingface_hub_cache(self, monkeypatch, tmp_path):
+        from audacity_mcp.tools.transcription_tools import _get_cache_dir
+
+        explicit = str(tmp_path / "explicit-cache")
+        monkeypatch.setenv("HUGGINGFACE_HUB_CACHE", explicit)
+        monkeypatch.delenv("HF_HOME", raising=False)
+
+        assert _get_cache_dir() == explicit
+
+    def test_honors_hf_home(self, monkeypatch, tmp_path):
+        from audacity_mcp.tools.transcription_tools import _get_cache_dir
+
+        hf_home = str(tmp_path / "hf-home")
+        monkeypatch.delenv("HUGGINGFACE_HUB_CACHE", raising=False)
+        monkeypatch.setenv("HF_HOME", hf_home)
+
+        result = _get_cache_dir()
+        assert result == os.path.join(hf_home, "hub")
+
+    def test_falls_back_to_hardcoded_default_when_unset(self, monkeypatch):
+        from audacity_mcp.tools.transcription_tools import _get_cache_dir
+
+        monkeypatch.delenv("HUGGINGFACE_HUB_CACHE", raising=False)
+        monkeypatch.delenv("HF_HOME", raising=False)
+
+        result = _get_cache_dir()
+        assert result == os.path.join(os.path.expanduser("~"), ".cache", "huggingface", "hub")
+
+    def test_huggingface_hub_cache_takes_priority_over_hf_home(self, monkeypatch, tmp_path):
+        from audacity_mcp.tools.transcription_tools import _get_cache_dir
+
+        explicit = str(tmp_path / "explicit-wins")
+        monkeypatch.setenv("HUGGINGFACE_HUB_CACHE", explicit)
+        monkeypatch.setenv("HF_HOME", str(tmp_path / "hf-home-loses"))
+
+        assert _get_cache_dir() == explicit
+
+
 class TestValidation:
     def test_invalid_model_size(self, registered_tools):
         tool = registered_tools["transcribe_audio"]
@@ -117,6 +164,22 @@ class TestTranscribeToLabels:
         result = await tool.fn(model_size="base")
         assert "job_id" in result
 
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_task_translate_accepted(self, registered_tools, mock_client):
+        # Regression: task wasn't exposed at all before, forcing a switch to
+        # transcribe_audio + manual label reconstruction just to retry in
+        # translate mode after a bad language auto-detect.
+        tool = registered_tools["transcribe_to_labels"]
+        result = await tool.fn(model_size="base", task="translate")
+        assert "job_id" in result
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_invalid_task_rejected(self, registered_tools, mock_client):
+        tool = registered_tools["transcribe_to_labels"]
+        with pytest.raises(AudacityMCPError) as exc_info:
+            await tool.fn(model_size="base", task="bogus")
+        assert exc_info.value.code == ErrorCode.INVALID_PARAMETER
+
 
 class TestTranscribeToFile:
     @pytest.mark.asyncio(loop_scope="function")
@@ -125,6 +188,21 @@ class TestTranscribeToFile:
         out_path = str(tmp_path / "test.srt")
         result = await tool.fn(path=out_path, format="srt", model_size="base")
         assert "job_id" in result
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_task_translate_accepted(self, registered_tools, mock_client, tmp_path):
+        tool = registered_tools["transcribe_to_file"]
+        out_path = str(tmp_path / "test_translate.srt")
+        result = await tool.fn(path=out_path, format="srt", model_size="base", task="translate")
+        assert "job_id" in result
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_invalid_task_rejected(self, registered_tools, mock_client, tmp_path):
+        tool = registered_tools["transcribe_to_file"]
+        out_path = str(tmp_path / "test_invalid.srt")
+        with pytest.raises(AudacityMCPError) as exc_info:
+            await tool.fn(path=out_path, format="srt", model_size="base", task="bogus")
+        assert exc_info.value.code == ErrorCode.INVALID_PARAMETER
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_vtt_returns_job_id(self, registered_tools, mock_client, tmp_path):
@@ -287,3 +365,104 @@ class TestCudaIsAvailable:
         monkeypatch.setattr(sys, "platform", "darwin")
 
         assert _cuda_is_available() is False
+
+
+class TestRunTranscriptionProgress:
+    def test_on_progress_called_once_per_segment(self, monkeypatch):
+        from audacity_mcp.tools.transcription_tools import _run_transcription
+
+        monkeypatch.setattr(
+            "audacity_mcp.tools.transcription_tools._get_model",
+            lambda size: MagicMock(transcribe=fake_transcribe),
+        )
+
+        calls = []
+        results, info = _run_transcription("fake.wav", "tiny", None, "transcribe", on_progress=lambda: calls.append(1))
+
+        assert len(calls) == len(make_fake_segments())
+        assert len(results) == len(make_fake_segments())
+
+    def test_on_progress_is_optional(self, monkeypatch):
+        from audacity_mcp.tools.transcription_tools import _run_transcription
+
+        monkeypatch.setattr(
+            "audacity_mcp.tools.transcription_tools._get_model",
+            lambda size: MagicMock(transcribe=fake_transcribe),
+        )
+
+        results, info = _run_transcription("fake.wav", "tiny", None, "transcribe")
+        assert len(results) == len(make_fake_segments())
+
+
+class TestStaleJobCleanup:
+    # Reported bug: long files (thousands of segments, each needing a
+    # SelectTime+AddLabel+SetLabel round trip) legitimately run past 10
+    # minutes total, but were being killed mid-way because staleness was
+    # keyed on time-since-start rather than time-since-last-progress -
+    # silently truncating labels partway through the file.
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_recent_progress_survives_despite_old_start_time(self, registered_tools):
+        import time
+        from audacity_mcp.tools.transcription_tools import _jobs, _STALE_JOB_TIMEOUT
+
+        job_id = "test-recent-progress"
+        _jobs[job_id] = {
+            "status": "running",
+            "current_step": "adding labels to Audacity (500/3000)",
+            "steps_completed": [],
+            "started_at": time.time() - (_STALE_JOB_TIMEOUT + 100),
+            "last_progress_at": time.time(),
+            "result": None,
+            "error": None,
+        }
+        try:
+            tool = registered_tools["check_transcription_status"]
+            result = await tool.fn(job_id=job_id)
+            assert result["status"] == "running"
+        finally:
+            _jobs.pop(job_id, None)
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_no_recent_progress_is_killed(self, registered_tools):
+        import time
+        from audacity_mcp.tools.transcription_tools import _jobs, _STALE_JOB_TIMEOUT
+
+        job_id = "test-stuck"
+        _jobs[job_id] = {
+            "status": "running",
+            "current_step": "transcribing audio",
+            "steps_completed": [],
+            "started_at": time.time() - (_STALE_JOB_TIMEOUT + 100),
+            "last_progress_at": time.time() - (_STALE_JOB_TIMEOUT + 50),
+            "result": None,
+            "error": None,
+        }
+        try:
+            tool = registered_tools["check_transcription_status"]
+            result = await tool.fn(job_id=job_id)
+            assert result["status"] == "error"
+            assert "No progress" in result["error"]
+        finally:
+            _jobs.pop(job_id, None)
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_missing_last_progress_at_falls_back_to_started_at(self, registered_tools):
+        import time
+        from audacity_mcp.tools.transcription_tools import _jobs, _STALE_JOB_TIMEOUT
+
+        job_id = "test-legacy-shape"
+        _jobs[job_id] = {
+            "status": "running",
+            "current_step": "transcribing audio",
+            "steps_completed": [],
+            "started_at": time.time() - (_STALE_JOB_TIMEOUT + 100),
+            "result": None,
+            "error": None,
+        }
+        try:
+            tool = registered_tools["check_transcription_status"]
+            result = await tool.fn(job_id=job_id)
+            assert result["status"] == "error"
+        finally:
+            _jobs.pop(job_id, None)

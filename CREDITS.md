@@ -112,9 +112,11 @@ Audacity's own scripting module, so there is nothing here worth diverging on.
 Requires Audacity 3.x with `mod-script-pipe` enabled; 4.x is not supported
 upstream.
 
-Its `mcp` dependency is unpinned upstream but must stay below 2.0 — the server
-imports `mcp.server.fastmcp`, which `mcp` 2.0 removed. `toolkit.json` carries
-that pin for both the runtime and the test environment.
+Vendored at upstream v0.1.15 (updated 2026-07-30 from v0.1.13, picking up the
+transcription-truncation and task-param fixes). Upstream now pins `mcp<2`
+itself — the server imports `mcp.server.fastmcp`, which `mcp` 2.0 removed —
+and `toolkit.json` keeps the same pin for the runtime and test environments as
+belt and braces.
 
 What this repo adds: Audacity executable detection, a readiness probe that
 checks whether the scripting pipes actually exist (the usual reason a call

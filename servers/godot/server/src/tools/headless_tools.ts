@@ -83,8 +83,23 @@ export const headlessTools: MCPTool[] = [
       }
 
       // --quit exits after the first frame, which is enough for Godot to
-      // import every resource and report anything that fails to parse.
-      const result = await runGodot(['--headless', '--path', projectDir, '--quit'], {
+      // import every resource and report anything that fails to parse. But it
+      // needs a main scene to render that frame: without one, Godot prints
+      // "Can't run project" and then -- when spawned with piped stdio -- never
+      // exits, so the run used to burn the whole timeout and report "project
+      // may be very large". --import does the same import pass and exits
+      // cleanly, so projects with no main scene are validated with that.
+      let projectFile = '';
+      try {
+        projectFile = fs.readFileSync(path.join(projectDir, 'project.godot'), 'utf8');
+      } catch {
+        // resolveProjectDir already proved it exists; a read failure here will
+        // surface from the Godot run itself.
+      }
+      const hasMainScene = /^\s*run\/main_scene\s*=/m.test(projectFile);
+      const modeFlag = hasMainScene ? '--quit' : '--import';
+
+      const result = await runGodot(['--headless', '--path', projectDir, modeFlag], {
         timeoutMs: timeout_seconds * 1000,
       });
 
@@ -95,12 +110,14 @@ export const headlessTools: MCPTool[] = [
         .map((line) => line.trim());
 
       if (result.timedOut) {
-        return `Validation timed out after ${timeout_seconds}s. Project may be very large, or the run hung.`;
+        return `Validation timed out after ${timeout_seconds}s (ran with ${modeFlag}). Project may be very large, or the run hung.`;
       }
 
       return JSON.stringify(
         {
           project: projectDir,
+          mode: modeFlag,
+          main_scene_defined: hasMainScene,
           exit_code: result.code,
           healthy: result.ok && problems.length === 0,
           problem_count: problems.length,

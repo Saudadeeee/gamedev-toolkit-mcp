@@ -19,7 +19,11 @@ from _toolkit import (REGISTRY, ROOT, load_registry, venv_can_import, which,
                       working_venv_script)
 
 SCRIPT_MODULES = ("_toolkit", "_mcp_probe", "_repo_checks",
-                  "install_vendored", "write_mcp_config", "verify_toolkit")
+                  "install_vendored", "write_mcp_config", "verify_toolkit",
+                  # scripts/checks/ -- run by CI and the full verify; a syntax
+                  # error there fails just as silently.
+                  "checks.gdcheck", "checks.test_vendored",
+                  "checks.check_upstream_drift")
 
 # Tab, LF and CR are line endings, which .gitattributes governs. What this is
 # looking for is the BEL that once turned "servers\aseprite" into an

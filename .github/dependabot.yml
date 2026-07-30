@@ -1,0 +1,28 @@
+# Dependency updates for the first-party servers and the workflows themselves.
+#
+# The vendored servers (servers/audacity, servers/obsidian, servers/blockbench)
+# are deliberately absent: their dependencies are upstream's to manage, and
+# bumping them here would silently break the "vendored verbatim" status that
+# COPYRIGHT records. The scheduled upstream-drift workflow is what watches
+# those -- pulling a new upstream release brings its dependency changes along.
+
+version: 2
+
+updates:
+  - package-ecosystem: uv
+    directory: /servers/aseprite
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: npm
+    directory: /servers/godot/server
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
