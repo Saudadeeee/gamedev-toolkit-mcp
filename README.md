@@ -1,10 +1,10 @@
 # GameDev Toolkit MCP
 
-Six MCP (Model Context Protocol) servers covering the complete game pipeline —
+Seven MCP (Model Context Protocol) servers covering the complete game pipeline —
 planning, pixel art, 3D models, audio, and the engine that consumes them —
 driven entirely through natural language.
 
-All six live under [`servers/`](./servers/) and are tracked here: three built and
+All seven live under [`servers/`](./servers/) and are tracked here: four built and
 maintained in this repo, three vendored verbatim from upstream.
 [`toolkit.json`](./toolkit.json) is the single registry that says which is which —
 setup, config generation and verification all read it, so nothing hardcodes the list.
@@ -14,13 +14,14 @@ setup, config generation and verification all read it, so nothing hardcodes the 
 | `aseprite` | Aseprite | **this repo** · MIT | 165 |
 | `godot-mcp` | Godot 4 | **this repo** · MIT | 141 |
 | `rfxgen` | rfxgen | **this repo** · original, GPL-3.0 | 8 |
+| `ffmpeg` | ffmpeg | **this repo** · original, GPL-3.0 | 9 |
 | `blockbench` | Blockbench | vendored — [jasonjgardner/blockbench-mcp-plugin](https://github.com/jasonjgardner/blockbench-mcp-plugin) · GPL-3.0 | 94 |
 | `audacity` | Audacity 3.x | vendored — [xDarkzx/Audacity-MCP](https://github.com/xDarkzx/Audacity-MCP) · Apache-2.0 | 131 + 9 pipelines |
 | `obsidian` | Obsidian | vendored — [MarkusPfundstein/mcp-obsidian](https://github.com/MarkusPfundstein/mcp-obsidian) · MIT | 15 |
 
 `get_toolkit_status` reports which applications are installed and which bridges
 are currently reachable — all three vendored servers need their app running, the
-three first-party ones mostly do not.
+four first-party ones mostly do not.
 
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue)](https://python.org)
 [![Node.js 18+](https://img.shields.io/badge/Node.js-18+-green)](https://nodejs.org)
@@ -44,6 +45,7 @@ AI reads AGENTS.md
      ├── 3D model / UV / rig           →  blockbench  (94 tools, vendored)
      ├── SFX / music / audio cleanup   →  audacity    (131 tools, vendored)
      ├── retro SFX / chiptune blip     →  rfxgen      (8 tools, first-party)
+     ├── ogg convert / GIF / trailer   →  ffmpeg      (9 tools, first-party)
      └── scene / node / script / build →  godot-mcp   (141 tools, first-party)
 ```
 
@@ -172,6 +174,21 @@ it, mutate it into variations, keep the winner's parameters for exact reload.
 rfxgen exits 0 on every failure, so every render is verified by inspecting
 the output audio — same no-silent-failures discipline as the aseprite server.
 
+### [ffmpeg](./servers/ffmpeg/)
+
+Python MCP server, original to this toolkit. Drives ffmpeg through its CLI —
+the pipeline's format glue.
+
+- **Stack:** Python 3.12+
+- **Tools:** 9 — audio conversion/trim/batch, waveform preview, GIF/webm, frame extraction
+
+Nothing else in the toolkit writes `.ogg`, and `.ogg` Vorbis is what Godot
+wants for music. rfxgen and Audacity make the sounds; ffmpeg delivers them in
+engine shape — and turns godot-mcp's captures into devlog GIFs and trailer
+clips (nearest-neighbour scaling, so pixel art stays crisp). Every render is
+verified with ffprobe: real streams, non-zero duration.
+
+
 
 ---
 
@@ -189,7 +206,7 @@ chmod +x setup.sh && ./setup.sh      # macOS / Linux
 
 One script does the lot: checks prerequisites, installs the two first-party
 servers, builds the vendored ones' virtualenvs, auto-detects your applications,
-and writes an `mcp_config.json` covering **all six** servers.
+and writes an `mcp_config.json` covering **all seven** servers.
 
 **Option B — Manual**, from the repository root:
 
@@ -315,6 +332,16 @@ Real-time data queried from the live Godot editor session:
 
 ---
 
+### ffmpeg — 9 Tools
+
+| Category | Tools |
+|---|---|
+| **Info** | get_ffmpeg_info, get_media_info |
+| **Audio** | convert_audio (the wav→ogg Godot path), trim_audio (fades, loops, stingers), batch_convert_audio, make_waveform_image |
+| **Video** | make_gif (palette-optimized, pixel-art safe), make_video (.webm/.mp4), extract_frames (references for aseprite) |
+
+---
+
 ### rfxgen — 8 Tools
 
 | Category | Tools |
@@ -424,6 +451,12 @@ gamedev-toolkit-mcp/
 │   │   │   └── tools/          # presets, parametric design, variations, convert
 │   │   └── tests/
 │   │
+│   ├── ffmpeg/                 # first-party · Python — format glue, GIF/webm
+│   │   ├── ffmpeg_mcp/
+│   │   │   ├── core/           # ffmpeg/ffprobe runner, output verification
+│   │   │   └── tools/          # audio (ogg path), video (gif/webm/frames)
+│   │   └── tests/
+│   │
 │   ├── audacity/               # vendored · Apache-2.0 — verbatim upstream
 │   ├── obsidian/               # vendored · MIT        — verbatim upstream
 │   └── blockbench/             # vendored · GPL-3.0    — verbatim upstream
@@ -433,7 +466,7 @@ gamedev-toolkit-mcp/
     ├── _toolkit.py             # shared registry access + probes
     ├── _mcp_probe.py           # MCP stdio handshake, application bridges
     ├── install_vendored.py     # build the vendored servers' virtualenvs
-    ├── write_mcp_config.py     # generate mcp_config.json for all six
+    ├── write_mcp_config.py     # generate mcp_config.json for all seven
     ├── verify_toolkit.py       # one command to check everything
     ├── _repo_checks.py         # registry, script and setup-script checks
     ├── install_godot_plugin.py
@@ -455,12 +488,12 @@ its upstream HEAD, since vendored fixes stop arriving on their own.
 
 ### `first-party` vs `vendored`
 
-All six are tracked in the same place. `toolkit.json` records an `origin` per
+All seven are tracked in the same place. `toolkit.json` records an `origin` per
 server, which decides only **who fixes its bugs** and how an update arrives:
 
 | | `first-party` | `vendored` |
 |---|---|---|
-| Servers | `aseprite`, `godot-mcp`, `rfxgen` | `audacity`, `obsidian`, `blockbench` |
+| Servers | `aseprite`, `godot-mcp`, `rfxgen`, `ffmpeg` | `audacity`, `obsidian`, `blockbench` |
 | Who fixes bugs | this repo | upstream |
 | How to change it | edit it | send it upstream; see [docs/setup.md](./docs/setup.md#pulling-a-newer-upstream-into-a-vendored-server) |
 | Modified here | yes, extensively | no — verbatim copies |

@@ -1,6 +1,6 @@
 # GameDev Toolkit MCP — Agent Instructions
 
-Six MCP servers covering the whole 2D/low-poly game pipeline: planning, art,
+Seven MCP servers covering the whole 2D/low-poly game pipeline: planning, art,
 models, audio and the engine that consumes them.
 
 | Server | Drives | Owns |
@@ -10,6 +10,7 @@ models, audio and the engine that consumes them.
 | **`blockbench`** | Blockbench | 3D models, UV maps, model textures, bone rigs |
 | **`rfxgen`** | rfxgen | Retro SFX synthesis — presets, parametric design, variations |
 | **`audacity`** | Audacity | Sound effects, music, recording, mastering |
+| **`ffmpeg`** | ffmpeg | Format glue — ogg for Godot, GIF/webm from captures, media inspection |
 | **`godot-mcp`** | Godot 4 | Scenes, nodes, scripts, gameplay, builds |
 
 Whichever are configured are active at once. `get_toolkit_status` (on the
@@ -42,6 +43,9 @@ first when a tool does not respond.
 | Generate tones, noise, or chiptune-style SFX | `audacity` |
 | Clean up noise, normalise, master a track | `audacity` |
 | Export WAV/OGG/MP3 | `audacity` |
+| Convert audio to .ogg for Godot music | `ffmpeg` (`convert_audio`) |
+| Make a devlog GIF or trailer clip from captures | `ffmpeg` (`make_gif`, `make_video`) |
+| Extract video frames as reference for pixel art | `ffmpeg` (`extract_frames`) |
 | Create or open a Godot scene | `godot-mcp` |
 | Add, edit, or remove a node | `godot-mcp` |
 | Write or modify a GDScript | `godot-mcp` |
@@ -71,6 +75,7 @@ This trips up more calls than anything else:
 | `blockbench` | **Yes** — app open with the MCP plugin loaded | HTTP, usually port 3000 (the plugin picks it) |
 | `rfxgen` | **No** — spawns the rfxgen CLI per call | binary via `RFXGEN_PATH` or standard paths |
 | `audacity` | **Yes** — app open with `mod-script-pipe` enabled | Audacity 3.x only |
+| `ffmpeg` | **No** — spawns ffmpeg per call | binary via `FFMPEG_PATH` or standard paths |
 | `obsidian` | **Yes** — app open with the Local REST API plugin | `OBSIDIAN_API_KEY` from that plugin |
 
 When a call fails with a connection error, check `get_toolkit_status` before
@@ -309,7 +314,7 @@ hand — it probes every one of them and prints what is still missing.
 - [ ] Aseprite installed and `ASEPRITE_PATH` configured
 - [ ] Godot 4.x installed, project open in the editor with `godot_mcp` enabled
 - [ ] `OBSIDIAN_API_KEY` set — `python scripts/configure_obsidian.py`
-- [ ] All six servers registered in the MCP client config
+- [ ] All seven servers registered in the MCP client config
 
 Which servers exist and how each is installed comes from
 [`toolkit.json`](toolkit.json). Nothing else hardcodes that list — if a server

@@ -253,6 +253,32 @@ SPECS: Dict[str, ToolSpec] = {
         mcp_transport="stdio (this repo's rfxgen server)",
         mcp_notes="Driven per call through its CLI; no running instance needed.",
     ),
+    "ffmpeg": ToolSpec(
+        key="ffmpeg",
+        display_name="ffmpeg",
+        windows=[
+            r"D:\Appsfmpeginfmpeg.exe",
+            r"C:\Appsfmpeginfmpeg.exe",
+            r"C:fmpeginfmpeg.exe",
+            r"C:\Program Filesfmpeginfmpeg.exe",
+            r"%LOCALAPPDATA%\Programsfmpeginfmpeg.exe",
+            r"C:\Toolsfmpeginfmpeg.exe",
+            r"D:\Toolsfmpeginfmpeg.exe",
+        ],
+        darwin=[
+            "/opt/homebrew/bin/ffmpeg",
+            "/usr/local/bin/ffmpeg",
+        ],
+        linux=[
+            "/usr/bin/ffmpeg",
+            "/usr/local/bin/ffmpeg",
+        ],
+        on_path=["ffmpeg"],
+        registry_needle="ffmpeg",
+        registry_exe="ffmpeg.exe",
+        mcp_transport="stdio (this repo's ffmpeg server)",
+        mcp_notes="Driven per call through its CLI; no running instance needed.",
+    ),
 }
 
 TOOL_KEYS = list(SPECS)

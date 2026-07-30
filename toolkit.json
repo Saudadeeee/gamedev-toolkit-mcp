@@ -155,6 +155,32 @@
       "appSetup": "None -- the server spawns the rfxgen CLI per call. Needs the binary: RFXGEN_PATH or a standard install location."
     },
 
+    "ffmpeg": {
+      "origin": "first-party",
+      "runtime": "stdio",
+      "drives": "ffmpeg",
+      "owns": "Format glue -- ogg for Godot music, GIF/webm from captures, batch convert, media inspection",
+      "license": "GPL-3.0-or-later",
+      "$comment": "Original code, no upstream. The ffmpeg application it drives is an external tool under its own licence, not redistributed.",
+      "path": "servers/ffmpeg",
+      "install": { "type": "uv-project" },
+      "client": {
+        "command": "uv",
+        "args": ["--directory", "{path}", "run", "-m", "ffmpeg_mcp"],
+        "cwd": "{path}",
+        "env": { "FFMPEG_PATH": "{app:ffmpeg}" }
+      },
+      "fallbackClient": {
+        "$comment": "Used when uv is not on PATH. cwd is what makes -m resolvable.",
+        "command": "python",
+        "args": ["-m", "ffmpeg_mcp"],
+        "cwd": "{path}",
+        "env": { "FFMPEG_PATH": "{app:ffmpeg}" }
+      },
+      "requiresApp": false,
+      "appSetup": "None -- the server spawns ffmpeg per call. Needs the binary (with ffprobe beside it): FFMPEG_PATH or a standard install location."
+    },
+
     "audacity": {
       "origin": "vendored",
       "runtime": "stdio",

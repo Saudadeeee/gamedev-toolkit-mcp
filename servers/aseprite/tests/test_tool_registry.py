@@ -30,6 +30,7 @@ class TestRegistryShape:
             "obsidian",
             "audacity",
             "rfxgen",
+            "ffmpeg",
         }
 
     def test_keys_match_their_spec(self):
