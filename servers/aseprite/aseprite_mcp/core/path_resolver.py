@@ -452,6 +452,7 @@ _ENV_OVERRIDES = {
     "blockbench": "BLOCKBENCH_PATH",
     "audacity": "AUDACITY_PATH",
     "obsidian": "OBSIDIAN_PATH",
+    "rfxgen": "RFXGEN_PATH",
 }
 
 

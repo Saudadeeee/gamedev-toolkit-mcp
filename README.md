@@ -1,10 +1,10 @@
 # GameDev Toolkit MCP
 
-Five MCP (Model Context Protocol) servers covering the complete game pipeline —
+Six MCP (Model Context Protocol) servers covering the complete game pipeline —
 planning, pixel art, 3D models, audio, and the engine that consumes them —
 driven entirely through natural language.
 
-All five live under [`servers/`](./servers/) and are tracked here: two built and
+All six live under [`servers/`](./servers/) and are tracked here: three built and
 maintained in this repo, three vendored verbatim from upstream.
 [`toolkit.json`](./toolkit.json) is the single registry that says which is which —
 setup, config generation and verification all read it, so nothing hardcodes the list.
@@ -13,13 +13,14 @@ setup, config generation and verification all read it, so nothing hardcodes the 
 |---|---|---|---|
 | `aseprite` | Aseprite | **this repo** · MIT | 165 |
 | `godot-mcp` | Godot 4 | **this repo** · MIT | 141 |
+| `rfxgen` | rfxgen | **this repo** · original, GPL-3.0 | 8 |
 | `blockbench` | Blockbench | vendored — [jasonjgardner/blockbench-mcp-plugin](https://github.com/jasonjgardner/blockbench-mcp-plugin) · GPL-3.0 | 94 |
 | `audacity` | Audacity 3.x | vendored — [xDarkzx/Audacity-MCP](https://github.com/xDarkzx/Audacity-MCP) · Apache-2.0 | 131 + 9 pipelines |
 | `obsidian` | Obsidian | vendored — [MarkusPfundstein/mcp-obsidian](https://github.com/MarkusPfundstein/mcp-obsidian) · MIT | 15 |
 
 `get_toolkit_status` reports which applications are installed and which bridges
 are currently reachable — all three vendored servers need their app running, the
-two first-party ones mostly do not.
+three first-party ones mostly do not.
 
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue)](https://python.org)
 [![Node.js 18+](https://img.shields.io/badge/Node.js-18+-green)](https://nodejs.org)
@@ -42,6 +43,7 @@ AI reads AGENTS.md
      ├── sprite / texture / animation  →  aseprite    (165 tools, first-party)
      ├── 3D model / UV / rig           →  blockbench  (94 tools, vendored)
      ├── SFX / music / audio cleanup   →  audacity    (131 tools, vendored)
+     ├── retro SFX / chiptune blip     →  rfxgen      (8 tools, first-party)
      └── scene / node / script / build →  godot-mcp   (141 tools, first-party)
 ```
 
@@ -154,6 +156,23 @@ Python MCP server. Controls Aseprite programmatically via Lua script injection i
 
 Upstream contributes the animation engine (eased tweens, tags, onion skin), pixel readback, scene validation/audit, native engine filters, dithering and the layer-targeted `*_at` drawing tools.
 
+### [rfxgen](./servers/rfxgen/)
+
+Python MCP server, original to this toolkit. Drives [rfxgen](https://github.com/raysan5/rfxgen)
+(raylib's sfxr-style SFX generator) through its CLI — spawned per call, no
+running application needed.
+
+- **Stack:** Python 3.12+
+- **Tools:** 8 — presets, full parametric synthesis, variations, conversion
+
+The CLI's seven presets are deterministic, so the server's real capability is
+authoring `.rfx` parameter files directly (22 synthesis parameters + wave
+type, format verified against rfxgen v5.0 source): describe a sound, render
+it, mutate it into variations, keep the winner's parameters for exact reload.
+rfxgen exits 0 on every failure, so every render is verified by inspecting
+the output audio — same no-silent-failures discipline as the aseprite server.
+
+
 ---
 
 ## Quick Start
@@ -170,7 +189,7 @@ chmod +x setup.sh && ./setup.sh      # macOS / Linux
 
 One script does the lot: checks prerequisites, installs the two first-party
 servers, builds the vendored ones' virtualenvs, auto-detects your applications,
-and writes an `mcp_config.json` covering **all five** servers.
+and writes an `mcp_config.json` covering **all six** servers.
 
 **Option B — Manual**, from the repository root:
 
@@ -296,6 +315,16 @@ Real-time data queried from the live Godot editor session:
 
 ---
 
+### rfxgen — 8 Tools
+
+| Category | Tools |
+|---|---|
+| **Info** | get_rfxgen_info, describe_sound_params, get_sound_info |
+| **Synthesis** | generate_preset (7 presets), design_sound (22 params + wave type, .rfx save), generate_variations (mutated takes with reloadable .rfx) |
+| **Conversion** | convert_audio (.rfx/.wav/.qoa/.ogg/.flac/.mp3 → .wav/.qoa/.raw/.h), export_wave_header |
+
+---
+
 ### aseprite — 165 Tools
 
 | Category | Tools |
@@ -389,6 +418,12 @@ gamedev-toolkit-mcp/
 │   │   │   └── utils/          # WebSocket client, Godot CLI wrapper
 │   │   └── docs/
 │   │
+│   ├── rfxgen/                 # first-party · Python — retro SFX synthesis
+│   │   ├── rfxgen_mcp/
+│   │   │   ├── core/           # .rfx format author/parser, CLI runner
+│   │   │   └── tools/          # presets, parametric design, variations, convert
+│   │   └── tests/
+│   │
 │   ├── audacity/               # vendored · Apache-2.0 — verbatim upstream
 │   ├── obsidian/               # vendored · MIT        — verbatim upstream
 │   └── blockbench/             # vendored · GPL-3.0    — verbatim upstream
@@ -398,7 +433,7 @@ gamedev-toolkit-mcp/
     ├── _toolkit.py             # shared registry access + probes
     ├── _mcp_probe.py           # MCP stdio handshake, application bridges
     ├── install_vendored.py     # build the vendored servers' virtualenvs
-    ├── write_mcp_config.py     # generate mcp_config.json for all five
+    ├── write_mcp_config.py     # generate mcp_config.json for all six
     ├── verify_toolkit.py       # one command to check everything
     ├── _repo_checks.py         # registry, script and setup-script checks
     ├── install_godot_plugin.py
@@ -420,12 +455,12 @@ its upstream HEAD, since vendored fixes stop arriving on their own.
 
 ### `first-party` vs `vendored`
 
-All five are tracked in the same place. `toolkit.json` records an `origin` per
+All six are tracked in the same place. `toolkit.json` records an `origin` per
 server, which decides only **who fixes its bugs** and how an update arrives:
 
 | | `first-party` | `vendored` |
 |---|---|---|
-| Servers | `aseprite`, `godot-mcp` | `audacity`, `obsidian`, `blockbench` |
+| Servers | `aseprite`, `godot-mcp`, `rfxgen` | `audacity`, `obsidian`, `blockbench` |
 | Who fixes bugs | this repo | upstream |
 | How to change it | edit it | send it upstream; see [docs/setup.md](./docs/setup.md#pulling-a-newer-upstream-into-a-vendored-server) |
 | Modified here | yes, extensively | no — verbatim copies |

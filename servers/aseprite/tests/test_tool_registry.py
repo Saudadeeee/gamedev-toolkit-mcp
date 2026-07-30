@@ -29,6 +29,7 @@ class TestRegistryShape:
             "blockbench",
             "obsidian",
             "audacity",
+            "rfxgen",
         }
 
     def test_keys_match_their_spec(self):
