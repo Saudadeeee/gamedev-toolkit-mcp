@@ -103,11 +103,12 @@ If you change a component listed UNMODIFIED above, you must:
   2. Set "modified": true for that server in toolkit.json.
   3. Update this table.
 
-That is a licence requirement, not a style preference. CI checks the toolkit.json
-field exists; it cannot check that you were honest about the rest.
+That is a licence requirement, not a style preference. scripts/verify_toolkit.py
+checks the toolkit.json field exists; it cannot check that you were honest about
+the rest.
 
 Never remove a LICENSE file from a component directory. Retaining it *is* the
-redistribution obligation, and CI fails without it.
+redistribution obligation, and scripts/verify_toolkit.py fails without it.
 
 ================================================================================
 WHAT THIS LICENCE ASKS OF YOU

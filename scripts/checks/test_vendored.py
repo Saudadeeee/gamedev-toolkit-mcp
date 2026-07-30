@@ -3,9 +3,9 @@
 Vendoring made this repo the redistributor of these projects, so a bad update
 is now our bug. Their suites are the cheapest way to notice one.
 
-    python scripts/ci/test_vendored.py             # every server with a suite
-    python scripts/ci/test_vendored.py obsidian    # just one
-    python scripts/ci/test_vendored.py --keep      # leave the test venvs behind
+    python scripts/checks/test_vendored.py             # every server with a suite
+    python scripts/checks/test_vendored.py obsidian    # just one
+    python scripts/checks/test_vendored.py --keep      # leave the test venvs behind
 
 Each suite runs in a throwaway `.venv-test` beside the server, never in the
 runtime venv that scripts/install_vendored.py builds. That separation is the

@@ -378,7 +378,7 @@ Copy in what you want, **keep the `LICENSE` file**, then:
 
 ```bash
 python scripts/install_vendored.py --force <name>
-python scripts/ci/test_vendored.py <name>      # upstream's own suite
+python scripts/checks/test_vendored.py <name>      # upstream's own suite
 python scripts/write_mcp_config.py
 python scripts/verify_toolkit.py --quick
 ```
@@ -390,9 +390,9 @@ is a licence requirement, not a style preference.
 ### Running the vendored suites
 
 ```bash
-python scripts/ci/test_vendored.py             # all of them
-python scripts/ci/test_vendored.py obsidian    # just one
-python scripts/ci/test_vendored.py --keep      # leave .venv-test for debugging
+python scripts/checks/test_vendored.py             # all of them
+python scripts/checks/test_vendored.py obsidian    # just one
+python scripts/checks/test_vendored.py --keep      # leave .venv-test for debugging
 ```
 
 Each suite runs in a throwaway `.venv-test`, never in the runtime venv. That is

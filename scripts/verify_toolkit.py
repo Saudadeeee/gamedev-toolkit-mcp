@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from _mcp_probe import audacity_pipes_live, mcp_handshake
+from _repo_checks import REPO_CHECKS
 from _toolkit import (BAD, CONFIG, OK, ROOT, SKIP, TODO, bridge_answers,
                       detect_applications, heading, load_registry, paint, port_open,
                       server_dir, venv_can_import, which, working_venv_script)
@@ -108,6 +109,23 @@ def configured_env(name: str, key: str) -> str:
 
 
 # --------------------------------------------------------------------- #
+
+
+def check_repository(report: Report) -> None:
+    """The registry, the helper scripts, and the setup scripts.
+
+    Cheap, and catches what no runtime probe can: a malformed registry, a
+    shadowed tool name, a stray control byte. These used to run in GitHub
+    Actions; they need no server, so they run here.
+    """
+    heading("Repository")
+    for label, check in REPO_CHECKS:
+        try:
+            ok, detail = check()
+        except Exception as error:  # a broken check must not abort the run
+            report.add(label, BAD, f"check itself failed: {error}")
+            continue
+        report.add(label, OK if ok else BAD, detail)
 
 
 def check_prerequisites(report: Report) -> None:
@@ -270,13 +288,20 @@ def check_suites(report: Report, quick: bool, apps: dict) -> None:
     ok, out = run(["npm", "run", "build"], GODOT_SERVER, timeout=600)
     report.add("godot-mcp TypeScript build", OK if ok else BAD, out if not ok else "tsc clean")
 
-    ok, out = run([sys.executable, str(ROOT / "scripts" / "ci" / "gdcheck.py"),
+    ok, out = run([sys.executable, str(ROOT / "scripts" / "checks" / "gdcheck.py"),
                    str(ROOT / "servers" / "godot" / "addons")], ROOT, timeout=120)
     report.add("GDScript structure", OK if ok else BAD, out)
 
     if quick:
+        report.add("vendored server suites", SKIP, "--quick given")
         report.add("app-driven suites", SKIP, "--quick given")
         return
+
+    # The vendored servers' own suites. Vendoring made this repo their
+    # redistributor, so a bad upstream update is now our bug.
+    ok, out = run([sys.executable, str(ROOT / "scripts" / "checks" / "test_vendored.py")],
+                  ROOT, timeout=1800)
+    report.add("vendored server suites", OK if ok else BAD, out)
 
     if apps.get("aseprite", {}).get("found"):
         for label, script in (("aseprite smoke", "tests/smoke_test.py"),
@@ -314,6 +339,7 @@ def main() -> int:
     print(f"repo: {ROOT}")
 
     report = Report()
+    check_repository(report)
     check_prerequisites(report)
     apps = check_applications(report)
     check_installs(report)

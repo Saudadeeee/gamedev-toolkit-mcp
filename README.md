@@ -400,13 +400,17 @@ gamedev-toolkit-mcp/
     ├── install_vendored.py     # build the vendored servers' virtualenvs
     ├── write_mcp_config.py     # generate mcp_config.json for all five
     ├── verify_toolkit.py       # one command to check everything
+    ├── _repo_checks.py         # registry, script and setup-script checks
     ├── install_godot_plugin.py
     ├── configure_obsidian.py
-    └── ci/                     # checks the GitHub workflow runs
+    └── checks/
         ├── test_vendored.py    # the vendored servers' own upstream suites
         ├── probe_mcp_server.mjs
         └── gdcheck.py
 ```
+
+There is no CI. `scripts/verify_toolkit.py` is the single gate and runs every
+check locally — see [Verifying](#verifying).
 
 ### `first-party` vs `vendored`
 
