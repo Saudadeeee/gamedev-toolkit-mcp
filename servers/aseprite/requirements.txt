@@ -8,7 +8,7 @@
 #   pip install -r requirements.txt
 
 # Core MCP framework
-mcp[cli]>=1.8.0
+mcp[cli]>=1.28.1
 
 # .env loading for ASEPRITE_PATH / GODOT_PATH
 python-dotenv>=1.2.2
