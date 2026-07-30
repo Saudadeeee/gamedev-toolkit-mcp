@@ -11,7 +11,7 @@
 mcp[cli]>=1.8.0
 
 # .env loading for ASEPRITE_PATH / GODOT_PATH
-python-dotenv>=1.0.0
+python-dotenv>=1.2.2
 
 # Async runtime for the stdio entrypoint
 anyio>=4.0.0
