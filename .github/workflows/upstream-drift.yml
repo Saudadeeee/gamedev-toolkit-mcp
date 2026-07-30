@@ -1,0 +1,29 @@
+# Vendoring means upstream fixes stop arriving on their own. This is the alarm
+# that says one is waiting: monthly, each vendored server is diffed against its
+# upstream HEAD, and a red run is the notification. The check itself lives in
+# scripts/checks/check_upstream_drift.py and runs identically on a developer
+# machine -- this workflow only schedules it.
+#
+# On drift: docs/setup.md, "Pulling a newer upstream into a vendored server".
+
+name: Upstream drift
+
+on:
+  schedule:
+    - cron: '0 8 1 * *'   # 08:00 UTC on the 1st of each month
+  workflow_dispatch:
+
+jobs:
+  drift:
+    name: vendored servers vs upstream HEAD
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compare vendored trees against upstream HEAD
+        run: python scripts/checks/check_upstream_drift.py

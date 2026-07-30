@@ -26,8 +26,23 @@ _job_lock = asyncio.Lock()
 
 def _get_cache_dir() -> str:
     """Get a reliable cache directory for whisper models.
-    MCP subprocesses on Windows sometimes can't resolve the default huggingface cache."""
-    cache = os.path.join(os.path.expanduser("~"), ".cache", "huggingface", "hub")
+
+    Honors HF_HOME/HUGGINGFACE_HUB_CACHE if the user has set them (so a model
+    pre-downloaded per the setup docs - which respects those same variables via
+    huggingface_hub's own default resolution - is found here too, instead of
+    silently re-downloading into a different, hardcoded location). Falls back
+    to the hardcoded ~/.cache/huggingface/hub only when neither is set, since
+    MCP subprocesses on Windows sometimes can't resolve huggingface_hub's own
+    default cache path.
+    """
+    explicit_cache = os.environ.get("HUGGINGFACE_HUB_CACHE")
+    if explicit_cache:
+        cache = explicit_cache
+    else:
+        hf_home = os.environ.get("HF_HOME")
+        cache = os.path.join(hf_home, "hub") if hf_home else os.path.join(
+            os.path.expanduser("~"), ".cache", "huggingface", "hub"
+        )
     os.makedirs(cache, exist_ok=True)
     return cache
 
@@ -149,7 +164,7 @@ def _get_model(model_size: str):
     return _model_instance
 
 
-def _run_transcription(temp_path: str, model_size: str, language: str | None, task: str):
+def _run_transcription(temp_path: str, model_size: str, language: str | None, task: str, on_progress=None):
     model = _get_model(model_size)
     kwargs = {"task": task}
     if language:
@@ -158,6 +173,8 @@ def _run_transcription(temp_path: str, model_size: str, language: str | None, ta
     results = []
     for seg in segments:
         results.append({"start": round(seg.start, 3), "end": round(seg.end, 3), "text": seg.text.strip()})
+        if on_progress:
+            on_progress()  # long files can take well over 10 minutes to transcribe alone
     return results, info
 
 
@@ -247,9 +264,14 @@ def register(mcp: FastMCP):
         await asyncio.sleep(1)
         temp_path = None
         loop = asyncio.get_running_loop()
+
+        def _progress():
+            job["last_progress_at"] = time.time()
+
         try:
             # Step 0: Check dependency (run import in thread to avoid blocking event loop)
             job["current_step"] = "checking faster-whisper installation"
+            _progress()
 
             def _check_dep():
                 import faster_whisper  # noqa: F401
@@ -264,9 +286,11 @@ def register(mcp: FastMCP):
                                 "See Transcription Setup in the installation guide.")
                 return
             job["steps_completed"].append("faster-whisper found")
+            _progress()
 
             # Step 1: Export audio
             job["current_step"] = "exporting audio from Audacity"
+            _progress()
             temp_path = os.path.join(tempfile.gettempdir(), f"audacity_mcp_transcribe_{uuid.uuid4().hex[:8]}.wav")
 
             if select_all:
@@ -281,35 +305,44 @@ def register(mcp: FastMCP):
 
             file_size = os.path.getsize(temp_path)
             job["steps_completed"].append(f"exported audio ({round(file_size / 1024 / 1024, 1)} MB)")
+            _progress()
 
             # Step 2: Load model (in thread — blocks for seconds)
             job["current_step"] = f"loading {model_size} model (first time downloads ~{_model_download_size(model_size)})"
+            _progress()
             await loop.run_in_executor(None, _get_model, model_size)
             job["steps_completed"].append(f"model {model_size} loaded")
+            _progress()
 
             # Step 3: Transcribe (in thread — blocks for 10-60+ seconds)
             job["current_step"] = "transcribing audio (this takes a while for long files)"
+            _progress()
             segments, info = await loop.run_in_executor(
-                None, _run_transcription, temp_path, model_size, language, task
+                None, _run_transcription, temp_path, model_size, language, task, _progress
             )
             job["steps_completed"].append(f"transcribed {len(segments)} segments")
+            _progress()
 
             full_text = " ".join(seg["text"] for seg in segments)
 
             # Step 4: Optional — add labels to Audacity
             if add_labels:
                 job["current_step"] = "adding labels to Audacity"
+                _progress()
                 from audacity_mcp.tools.label_tools import count_existing_labels
                 base_index = await count_existing_labels(client)
                 for i, seg in enumerate(segments):
                     await client.execute("SelectTime", Start=seg["start"], End=seg["end"])
                     await client.execute("AddLabel")
                     await client.execute("SetLabel", Label=base_index + i, Text=seg["text"])
+                    job["current_step"] = f"adding labels to Audacity ({i + 1}/{len(segments)})"
+                    _progress()  # long files add thousands of labels — each one counts as progress
                 job["steps_completed"].append(f"added {len(segments)} labels")
 
             # Step 5: Optional — export to file
             if export_path and export_format:
                 job["current_step"] = f"writing {export_format} file"
+                _progress()
                 formatters = {"srt": _segments_to_srt, "vtt": _segments_to_vtt, "txt": _segments_to_txt}
                 content = formatters[export_format](segments)
                 parent_dir = os.path.dirname(export_path)
@@ -363,12 +396,20 @@ def register(mcp: FastMCP):
             return False
 
     def _cleanup_stale_jobs():
-        """Kill jobs running longer than timeout, evict oldest completed jobs."""
+        """Kill jobs with no progress in over _STALE_JOB_TIMEOUT, evict oldest completed jobs.
+
+        Keyed on last PROGRESS, not total elapsed time — a long file's label-adding
+        loop (one SelectTime+AddLabel+SetLabel round trip per segment, easily
+        thousands of segments for a multi-hour transcript) can legitimately run
+        past 10 minutes total. Using started_at here killed jobs that were still
+        actively advancing, silently truncating labels partway through long files.
+        """
         now = time.time()
         for job_id, job in list(_jobs.items()):
-            if job["status"] == "running" and (now - job["started_at"]) > _STALE_JOB_TIMEOUT:
+            last_progress = job.get("last_progress_at", job["started_at"])
+            if job["status"] == "running" and (now - last_progress) > _STALE_JOB_TIMEOUT:
                 job["status"] = "error"
-                job["error"] = "Timed out after 10 minutes — killed automatically"
+                job["error"] = "No progress for 10 minutes — killed automatically (may be stuck)"
                 job["current_step"] = "timed out"
                 task = job.get("_task")
                 if task and not task.done():
@@ -406,11 +447,13 @@ def register(mcp: FastMCP):
                 }
 
             job_id = str(uuid.uuid4())[:8]
+            now = time.time()
             job = {
                 "status": "running",
                 "current_step": "starting",
                 "steps_completed": [],
-                "started_at": time.time(),
+                "started_at": now,
+                "last_progress_at": now,
                 "result": None,
                 "error": None,
             }
@@ -446,6 +489,14 @@ def register(mcp: FastMCP):
         After transcription completes, TELL the user where the transcript was saved
         or offer to save it. Always tell the user the file location so they can find it.
 
+        Language auto-detection can occasionally misidentify the language (background
+        music, noise, a short/ambiguous clip) and transcribe genuinely-English audio
+        in the wrong script entirely. If you already know the audio's language from
+        context, pass `language` explicitly (e.g. "en") instead of relying on
+        auto-detect, or set `task="translate"` to force English output regardless of
+        the spoken language. If a result comes back in an unexpected language/script,
+        just retry with THIS SAME tool and the corrected language/task.
+
         Args:
             model_size: Whisper model - "tiny", "base", "small", "medium", "large-v3". Default: "small"
             language: ISO language code (e.g. "en", "fr") or None for auto-detect
@@ -469,6 +520,10 @@ def register(mcp: FastMCP):
 
         Select a region first, then call this tool.
 
+        Language auto-detection can occasionally misidentify the language on a short
+        or ambiguous clip. If you already know the audio's language, pass `language`
+        explicitly (e.g. "en"), or set `task="translate"` to force English output.
+
         Args:
             model_size: Whisper model - "tiny", "base", "small", "medium", "large-v3"
             language: ISO language code or None for auto-detect
@@ -482,6 +537,7 @@ def register(mcp: FastMCP):
     async def transcribe_to_labels(
         model_size: str = "small",
         language: str | None = None,
+        task: str = "transcribe",
     ) -> dict:
         """[EXPERIMENTAL] Transcribe audio and add Audacity labels at each segment timestamp.
         Requires separate setup — see installation guide.
@@ -489,12 +545,27 @@ def register(mcp: FastMCP):
         Runs in BACKGROUND — returns a job_id immediately.
         Use check_transcription_status to monitor progress.
 
+        Language auto-detection can occasionally misidentify the language (background
+        music, noise, a short/ambiguous clip) and transcribe genuinely-English audio
+        in the wrong script entirely. If you already know the audio's language from
+        context (the user said so, or the labels came back in an unexpected script),
+        don't guess — pass `language` explicitly (e.g. "en"), or set `task="translate"`
+        to force English output regardless of the spoken language. Retry with THIS
+        SAME tool and the corrected language/task; there's no need to switch to a
+        different transcription tool to fix a bad language guess.
+
+        If labels from a previous attempt need clearing first: track_select the label
+        track, then track_remove, before re-running this.
+
         Args:
             model_size: Whisper model - "tiny", "base", "small", "medium", "large-v3"
-            language: ISO language code or None for auto-detect
+            language: ISO language code (e.g. "en") or None for auto-detect
+            task: "transcribe" (labels in the spoken language) or "translate" (labels
+                always in English, regardless of the spoken language)
         """
         _validate_model_size(model_size)
-        return await _start_transcription(model_size, language, "transcribe",
+        _validate_task(task)
+        return await _start_transcription(model_size, language, task,
                                      select_all=True, add_labels=True)
 
     @mcp.tool()
@@ -503,6 +574,7 @@ def register(mcp: FastMCP):
         format: str = "srt",
         model_size: str = "small",
         language: str | None = None,
+        task: str = "transcribe",
     ) -> dict:
         """[EXPERIMENTAL] Transcribe audio and export to a subtitle or text file.
         Requires separate setup — see installation guide.
@@ -514,11 +586,20 @@ def register(mcp: FastMCP):
         Runs in BACKGROUND — returns a job_id immediately.
         Use check_transcription_status to monitor progress.
 
+        Language auto-detection can occasionally misidentify the language (background
+        music, noise, a short/ambiguous clip) and transcribe genuinely-English audio
+        in the wrong script entirely. If you already know the audio's language from
+        context, pass `language` explicitly (e.g. "en"), or set `task="translate"` to
+        force English output regardless of the spoken language. Retry with THIS SAME
+        tool and the corrected language/task — use a new `path` since an existing file
+        at the same path is rejected below.
+
         Args:
             path: Absolute path for the output file (e.g. "C:/Users/You/Documents/transcript.srt")
             format: Output format - "srt", "vtt", or "txt"
             model_size: Whisper model - "tiny", "base", "small", "medium", "large-v3"
-            language: ISO language code or None for auto-detect
+            language: ISO language code (e.g. "en") or None for auto-detect
+            task: "transcribe" (spoken language) or "translate" (always English)
         """
         from audacity_mcp.tools.project_tools import _safe_path
         path = _safe_path(path)
@@ -533,7 +614,8 @@ def register(mcp: FastMCP):
                 f"Invalid format '{format}'. Must be one of: {', '.join(sorted(SUBTITLE_FORMATS))}",
             )
         _validate_model_size(model_size)
-        return await _start_transcription(model_size, language, "transcribe",
+        _validate_task(task)
+        return await _start_transcription(model_size, language, task,
                                      select_all=True, export_path=path, export_format=format)
 
     @mcp.tool()

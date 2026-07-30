@@ -404,13 +404,19 @@ gamedev-toolkit-mcp/
     ├── install_godot_plugin.py
     ├── configure_obsidian.py
     └── checks/
-        ├── test_vendored.py    # the vendored servers' own upstream suites
+        ├── test_vendored.py         # the vendored servers' own upstream suites
+        ├── check_upstream_drift.py  # vendored trees vs upstream HEAD
         ├── probe_mcp_server.mjs
         └── gdcheck.py
 ```
 
-There is no CI. `scripts/verify_toolkit.py` is the single gate and runs every
-check locally — see [Verifying](#verifying).
+Every check lives in `scripts/` and runs locally through
+`scripts/verify_toolkit.py` — the single gate. CI is a thin wrapper over the
+same scripts, on both Windows and Linux: the two worst bugs in this repo's
+history were platform divergences (a BEL byte that broke only Windows setup, a
+hardcoded path separator that failed only on Linux), and one platform cannot
+see either class. A monthly workflow also diffs each vendored server against
+its upstream HEAD, since vendored fixes stop arriving on their own.
 
 ### `first-party` vs `vendored`
 

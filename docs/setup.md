@@ -365,10 +365,14 @@ python scripts/write_mcp_config.py
 ### Pulling a newer upstream into a vendored server
 
 Vendoring means upstream fixes no longer arrive on their own, and that this repo
-is the one redistributing them. Treat an update as a licensing operation as much
-as a technical one.
+is the one redistributing them. A monthly workflow runs the drift check below
+and goes red when upstream has moved; treat an update as a licensing operation
+as much as a technical one.
 
 ```bash
+# Which vendored servers differ from upstream HEAD, and by how much:
+python scripts/checks/check_upstream_drift.py
+
 git clone --depth 1 <upstream-url> /tmp/upstream
 diff -ru servers/<name> /tmp/upstream --exclude=.git --exclude=.venv --exclude=.venv-test
 ```

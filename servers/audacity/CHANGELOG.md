@@ -2,6 +2,32 @@
 
 All notable changes to AudacityMCP will be documented in this file.
 
+## [0.1.15] - 2026-07-29
+
+### Transcription: Wrong-Language Retries, and Model Re-Downloads
+
+Two separate reports while using transcription on real files.
+
+**Retrying a bad language auto-detect required switching tools entirely.** A user's English audio got auto-detected and transcribed as Japanese. Fixing it meant removing the label track and starting over — but `transcribe_to_labels` and `transcribe_to_file` hardcoded `task="transcribe"` and never exposed the parameter at all, so there was no way to retry the *same* tool with `task="translate"` (forces English output) or an explicit `language`. The only way to recover was switching to `transcribe_audio` and manually reconstructing the labels from its output — exactly the tangle it took another Claude session an extra half-dozen tool calls to work around.
+
+- Added `task` to `transcribe_to_labels` and `transcribe_to_file`, matching `transcribe_audio`/`transcribe_selection`.
+- Added docstring guidance across all four transcription tools: auto-detect can occasionally misidentify the language (background music, noise, short/ambiguous clips) — if you already know the language, pass it explicitly instead of trusting auto-detect, and retry with the *same* tool rather than switching.
+
+**A model that was already downloaded appeared to re-download on first use.** `_get_cache_dir()` hardcoded `~/.cache/huggingface/hub`, ignoring `HF_HOME`/`HUGGINGFACE_HUB_CACHE`. The manual pre-download command in the setup docs uses huggingface_hub's own default resolution, which *does* honor those variables — so anyone who has ever redirected their HF cache (common for moving model storage to a bigger/different drive) would have the pre-downloaded model in one place and the running server hardcoded to look in another, re-downloading every time. Not reproduced on this dev machine (no mismatch here), but the hardcoded-path bug is real and independently verifiable in the source regardless.
+
+- `_get_cache_dir()` now checks `HUGGINGFACE_HUB_CACHE`, then `HF_HOME`, before falling back to the hardcoded default — the fallback still exists for its original purpose (some MCP subprocesses on Windows can't resolve huggingface_hub's own default cache path).
+- Added `tests/test_transcription.py::TestGetCacheDir` and extended `TestTranscribeToLabels`/`TestTranscribeToFile` for the `task` parameter.
+
+## [0.1.14] - 2026-07-29
+
+### Long Transcriptions Getting Silently Truncated
+
+Reported by a user: a 48-minute file only got ~23 minutes labeled, a 4.5-hour file only got ~45 minutes labeled — both cut off partway through, no error shown.
+
+- **Root cause**: `_cleanup_stale_jobs()` killed any transcription job running longer than `_STALE_JOB_TIMEOUT` (10 minutes) measured from **job start**, regardless of whether it was still actively progressing. The label-adding loop does a `SelectTime`+`AddLabel`+`SetLabel` round trip *per segment* — a multi-hour transcript can have thousands of segments, so that loop alone can legitimately run past 10 minutes even when working correctly. The next time `check_transcription_status` got polled after the 10-minute mark, it silently cancelled the still-running task mid-loop, leaving only whatever labels had been added so far.
+- **Fix**: staleness is now measured from **time since last progress**, not time since start. Every step transition and every single label added now updates a `last_progress_at` timestamp; a job only gets killed after 10 minutes with *no* forward progress (i.e. actually stuck), not just for running long on a big file. Also threaded progress reporting through the transcription step itself (`_run_transcription` now accepts an `on_progress` callback, called per-segment), so a slow CPU transcription of a very long file can't hit the same wall before labeling even starts.
+- Added `tests/test_transcription.py::TestStaleJobCleanup` and `TestRunTranscriptionProgress`.
+
 ## [0.1.13] - 2026-07-28
 
 ### Labels Overwriting Each Other

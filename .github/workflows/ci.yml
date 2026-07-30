@@ -1,0 +1,185 @@
+# CI is a thin wrapper: every check lives in scripts/ and runs identically on a
+# developer machine. If a step here does something scripts/verify_toolkit.py
+# cannot, that is a bug in the scripts, not a feature of the workflow.
+#
+# Both OSes matter and this is not decorative: the two worst bugs in this
+# repo's history were platform divergences. A BEL byte in setup.ps1 broke every
+# Windows setup while Linux CI stayed green, and two Steam-discovery tests
+# hardcoded Windows path separators and failed only on Linux. One platform
+# cannot see either class.
+
+name: CI
+
+on:
+  push:
+    branches: [master, main, develop]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  repo-checks:
+    name: repository checks (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # Registry validation, script imports, control bytes, setup-script
+      # syntax, duplicate tool names, config-generator coverage -- the same
+      # section a local run prints first.
+      - name: Repository checks
+        run: python scripts/verify_toolkit.py --repo-only
+
+  aseprite-mcp:
+    name: aseprite-mcp (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: servers/aseprite
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      # Coverage is measured over the whole package, not just core, so the
+      # number is honest. It is low by construction -- most tool modules are
+      # thin Lua-generating wrappers whose behaviour only exists against a real
+      # Aseprite, and the smoke/shading suites cover that side locally -- so it
+      # is reported, not gated.
+      - name: Unit tests
+        run: uv run python -m pytest tests/ -v --cov=aseprite_mcp --cov-report=term
+
+      - name: Import every tool module
+        run: uv run python -c "import aseprite_mcp.tools"
+
+      - name: Verify the server completes an MCP handshake
+        run: |
+          uv run python - <<'PY'
+          import json, subprocess, sys
+
+          proc = subprocess.Popen(
+              [sys.executable, "-m", "aseprite_mcp"],
+              stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+              text=True,
+          )
+          requests = [
+              {"jsonrpc": "2.0", "id": 1, "method": "initialize",
+               "params": {"protocolVersion": "2024-11-05", "capabilities": {},
+                          "clientInfo": {"name": "ci", "version": "0"}}},
+              {"jsonrpc": "2.0", "method": "notifications/initialized"},
+              {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+          ]
+          out, _ = proc.communicate("\n".join(json.dumps(r) for r in requests) + "\n", timeout=60)
+
+          seen = {}
+          for line in out.splitlines():
+              try:
+                  msg = json.loads(line)
+              except ValueError:
+                  continue
+              if "id" in msg:
+                  seen[msg["id"]] = msg
+
+          if 1 not in seen or "result" not in seen[1]:
+              sys.exit("initialize failed")
+          if 2 not in seen or "result" not in seen[2]:
+              sys.exit("tools/list failed")
+          print(f"handshake OK, {len(seen[2]['result']['tools'])} tools advertised")
+          PY
+
+  godot-mcp:
+    name: godot-mcp (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: servers/godot/server/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        working-directory: servers/godot/server
+        run: npm ci
+
+      - name: Type-check and build
+        working-directory: servers/godot/server
+        run: npm run build
+
+      - name: Verify the server completes an MCP handshake
+        working-directory: servers/godot/server
+        run: node "$GITHUB_WORKSPACE/scripts/checks/probe_mcp_server.mjs" dist/index.js
+
+      # Godot itself is not installed here, so the plugin cannot be executed.
+      # This catches the structural mistakes that are otherwise invisible
+      # until the editor loads the addon.
+      - name: GDScript structure check
+        run: python scripts/checks/gdcheck.py servers/godot/addons
+
+  vendored-servers:
+    name: vendored servers (upstream suites)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # Vendoring made this repo the redistributor of these projects, so a bad
+      # upstream update is now our bug. Their own suites are the cheapest way
+      # to notice. Ubuntu only: audacity pulls faster-whisper, whose native
+      # wheels make a second-platform run expensive for no extra signal.
+      - name: Run the vendored servers' own test suites
+        run: python scripts/checks/test_vendored.py

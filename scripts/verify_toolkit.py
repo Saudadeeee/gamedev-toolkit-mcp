@@ -333,6 +333,8 @@ def main() -> int:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--quick", action="store_true",
                         help="skip the suites that drive a real application")
+    parser.add_argument("--repo-only", action="store_true",
+                        help="run only the repository checks (what CI's check job runs)")
     args = parser.parse_args()
 
     print(paint("GameDev Toolkit MCP -- verification", "1"))
@@ -340,6 +342,16 @@ def main() -> int:
 
     report = Report()
     check_repository(report)
+    if args.repo_only:
+        heading("Summary")
+        passed = sum(1 for c in report.checks if c.status == OK)
+        print(f"  {passed} passed, {report.failed} failed")
+        if report.failed:
+            print(f"\n{BAD} -- fix the failures above.")
+            return 1
+        print(f"\n{OK} -- repository checks passed.")
+        return 0
+
     check_prerequisites(report)
     apps = check_applications(report)
     check_installs(report)

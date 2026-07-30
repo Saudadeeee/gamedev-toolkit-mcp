@@ -19,7 +19,11 @@ from _toolkit import (REGISTRY, ROOT, load_registry, venv_can_import, which,
                       working_venv_script)
 
 SCRIPT_MODULES = ("_toolkit", "_mcp_probe", "_repo_checks",
-                  "install_vendored", "write_mcp_config", "verify_toolkit")
+                  "install_vendored", "write_mcp_config", "verify_toolkit",
+                  # scripts/checks/ -- run by CI and the full verify; a syntax
+                  # error there fails just as silently.
+                  "checks.gdcheck", "checks.test_vendored",
+                  "checks.check_upstream_drift")
 
 # Tab, LF and CR are line endings, which .gitattributes governs. What this is
 # looking for is the BEL that once turned "servers\aseprite" into an
@@ -167,13 +171,25 @@ def check_duplicate_tool_names() -> tuple[bool, str]:
     )
     if which("uv") is None:
         return True, "uv not on PATH -- skipped"
-    ok, detail = _run(["uv", "run", "python", "-c", program], cwd=server, timeout=300)
+    # Full output, then find the JSON line: on a fresh machine `uv run` syncs
+    # the venv first and its "Installed N packages" progress lands after the
+    # result in the combined stream, so "take the last line" read uv's chatter
+    # instead of the answer.
+    ok, output = _run_full(["uv", "run", "python", "-c", program], cwd=server, timeout=600)
     if not ok:
-        return False, detail[:100]
-    try:
-        result = json.loads(detail)
-    except ValueError:
-        return False, detail[:100]
+        lines = [ln for ln in output.splitlines() if ln.strip()]
+        return False, (lines[-1] if lines else "uv run failed")[:100]
+    result = None
+    for line in reversed(output.splitlines()):
+        line = line.strip()
+        if line.startswith("{"):
+            try:
+                result = json.loads(line)
+                break
+            except ValueError:
+                continue
+    if result is None:
+        return False, "no JSON in the tool-listing output"
     if result["duplicates"]:
         return False, f"duplicate tool names: {result['duplicates']}"
     return True, f"{result['total']} tools, no duplicates"
