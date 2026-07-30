@@ -30,7 +30,12 @@ updates:
       # Deliberate: fastmcp 4 is a breaking API rewrite and zod 4 breaks
       # fastmcp 1.x (old PRs #10/#11 failed the build on both platforms).
       # Upgrading is a migration project to do together, not a bump.
+      # fastmcp moves its API even inside 1.x -- the 1.20 -> 1.27 bump broke
+      # the build on both platforms (old PR #24). All updates ignored; upgrade
+      # is one deliberate migration.
       - dependency-name: "fastmcp"
+      # TypeScript 7 is a compiler rewrite; the build fails (old PR #20).
+      - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
       - dependency-name: "zod"
         update-types: ["version-update:semver-major"]
