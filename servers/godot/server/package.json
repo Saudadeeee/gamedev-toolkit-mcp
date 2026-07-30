@@ -25,7 +25,7 @@
     "fastmcp": "^1.20.4",
     "websocket": "^1.0.35",
     "ws": "^8.13.0",
-    "zod": "^3.21.4"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^20.3.1",
