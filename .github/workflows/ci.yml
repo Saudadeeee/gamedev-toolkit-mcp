@@ -128,6 +128,50 @@ jobs:
       - name: Verify the server completes an MCP handshake
         run: python "$GITHUB_WORKSPACE/scripts/checks/probe_stdio_server.py" -- uv run python -m rfxgen_mcp
 
+  ffmpeg-mcp:
+    name: ffmpeg-mcp (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: servers/ffmpeg
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      # The unit suite deliberately needs no ffmpeg install; the smoke test
+      # that drives the real binary is excluded in pyproject.toml.
+      - name: Unit tests
+        run: uv run python -m pytest tests/ -v --cov=ffmpeg_mcp --cov-report=term
+
+      - name: Import every tool module
+        run: uv run python -c "import ffmpeg_mcp.tools"
+
+      - name: Verify the server completes an MCP handshake
+        run: python "$GITHUB_WORKSPACE/scripts/checks/probe_stdio_server.py" -- uv run python -m ffmpeg_mcp
+
+      # GitHub runners ship ffmpeg on both platforms, so the end-to-end suite
+      # can run in CI here -- unlike aseprite/rfxgen, whose applications are
+      # not installable on a runner.
+      - name: Smoke test against the runner's ffmpeg
+        run: uv run tests/smoke_test.py --clean
+
   godot-mcp:
     name: godot-mcp (${{ matrix.os }})
     strategy:

@@ -453,6 +453,7 @@ _ENV_OVERRIDES = {
     "audacity": "AUDACITY_PATH",
     "obsidian": "OBSIDIAN_PATH",
     "rfxgen": "RFXGEN_PATH",
+    "ffmpeg": "FFMPEG_PATH",
 }
 
 

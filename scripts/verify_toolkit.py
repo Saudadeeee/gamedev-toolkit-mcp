@@ -289,6 +289,10 @@ def check_suites(report: Report, quick: bool, apps: dict) -> None:
                   ROOT / "servers" / "rfxgen", timeout=300)
     report.add("rfxgen unit tests", OK if ok else BAD, out)
 
+    ok, out = run(["uv", "run", "python", "-m", "pytest", "-q"],
+                  ROOT / "servers" / "ffmpeg", timeout=300)
+    report.add("ffmpeg unit tests", OK if ok else BAD, out)
+
     ok, out = run(["npm", "run", "build"], GODOT_SERVER, timeout=600)
     report.add("godot-mcp TypeScript build", OK if ok else BAD, out if not ok else "tsc clean")
 
@@ -321,6 +325,13 @@ def check_suites(report: Report, quick: bool, apps: dict) -> None:
         report.add("rfxgen smoke", OK if ok else BAD, out)
     else:
         report.add("rfxgen smoke", SKIP, "rfxgen not found; set RFXGEN_PATH")
+
+    if apps.get("ffmpeg", {}).get("found"):
+        ok, out = run(["uv", "run", "tests/smoke_test.py", "--clean"],
+                      ROOT / "servers" / "ffmpeg", timeout=900)
+        report.add("ffmpeg smoke", OK if ok else BAD, out)
+    else:
+        report.add("ffmpeg smoke", SKIP, "ffmpeg not found; set FFMPEG_PATH")
 
     if apps.get("godot", {}).get("found"):
         demo = GODOT_SERVER / "tests" / "headless_test.mjs"
