@@ -1,6 +1,6 @@
 # GameDev Toolkit MCP — Agent Instructions
 
-Five MCP servers covering the whole 2D/low-poly game pipeline: planning, art,
+Six MCP servers covering the whole 2D/low-poly game pipeline: planning, art,
 models, audio and the engine that consumes them.
 
 | Server | Drives | Owns |
@@ -8,6 +8,7 @@ models, audio and the engine that consumes them.
 | **`obsidian`** | Obsidian | Design docs, task lists, notes — planning before building |
 | **`aseprite`** | Aseprite | Pixel art, sprites, spritesheets, palettes |
 | **`blockbench`** | Blockbench | 3D models, UV maps, model textures, bone rigs |
+| **`rfxgen`** | rfxgen | Retro SFX synthesis — presets, parametric design, variations |
 | **`audacity`** | Audacity | Sound effects, music, recording, mastering |
 | **`godot-mcp`** | Godot 4 | Scenes, nodes, scripts, gameplay, builds |
 
@@ -34,6 +35,8 @@ first when a tool does not respond.
 | UV map, texture a model, paint on a model | `blockbench` |
 | Rig bones, animate a model | `blockbench` |
 | Export glTF/OBJ/Minecraft model formats | `blockbench` |
+| Generate a retro/8-bit SFX from scratch (coin, laser, jump…) | `rfxgen` |
+| Design an SFX by synthesis parameters, or make variations | `rfxgen` |
 | Record, trim, or mix audio | `audacity` |
 | Apply audio effects (reverb, EQ, pitch, compression) | `audacity` |
 | Generate tones, noise, or chiptune-style SFX | `audacity` |
@@ -66,6 +69,7 @@ This trips up more calls than anything else:
 | `godot-mcp` scene tools | **Yes** — editor open, `godot_mcp` plugin enabled | WebSocket on port 9080 |
 | `godot-mcp` headless tools | **No** — drives the binary directly | none |
 | `blockbench` | **Yes** — app open with the MCP plugin loaded | HTTP, usually port 3000 (the plugin picks it) |
+| `rfxgen` | **No** — spawns the rfxgen CLI per call | binary via `RFXGEN_PATH` or standard paths |
 | `audacity` | **Yes** — app open with `mod-script-pipe` enabled | Audacity 3.x only |
 | `obsidian` | **Yes** — app open with the Local REST API plugin | `OBSIDIAN_API_KEY` from that plugin |
 
@@ -305,7 +309,7 @@ hand — it probes every one of them and prints what is still missing.
 - [ ] Aseprite installed and `ASEPRITE_PATH` configured
 - [ ] Godot 4.x installed, project open in the editor with `godot_mcp` enabled
 - [ ] `OBSIDIAN_API_KEY` set — `python scripts/configure_obsidian.py`
-- [ ] All five servers registered in the MCP client config
+- [ ] All six servers registered in the MCP client config
 
 Which servers exist and how each is installed comes from
 [`toolkit.json`](toolkit.json). Nothing else hardcodes that list — if a server

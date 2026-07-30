@@ -224,6 +224,35 @@ SPECS: Dict[str, ToolSpec] = {
             "(Preferences > Modules). Audacity 3.x only."
         ),
     ),
+    "rfxgen": ToolSpec(
+        key="rfxgen",
+        display_name="rfxgen",
+        windows=[
+            r"D:\Apps\rfxgen\rfxgen.exe",
+            r"C:\Apps\rfxgen\rfxgen.exe",
+            r"C:\Program Files\rfxgen\rfxgen.exe",
+            r"C:\Program Files (x86)\rfxgen\rfxgen.exe",
+            r"%LOCALAPPDATA%\Programs\rfxgen\rfxgen.exe",
+            r"C:\Tools\rfxgen\rfxgen.exe",
+            r"D:\Tools\rfxgen\rfxgen.exe",
+        ],
+        darwin=[
+            "/Applications/rfxgen.app/Contents/MacOS/rfxgen",
+            "~/Applications/rfxgen/rfxgen",
+        ],
+        linux=[
+            "/usr/local/bin/rfxgen",
+            "/usr/bin/rfxgen",
+            "/opt/rfxgen/rfxgen",
+        ],
+        on_path=["rfxgen"],
+        # `rfxgen --help` prints usage and exits; there is no --version flag.
+        supports_version_flag=False,
+        registry_needle="rfxgen",
+        registry_exe="rfxgen.exe",
+        mcp_transport="stdio (this repo's rfxgen server)",
+        mcp_notes="Driven per call through its CLI; no running instance needed.",
+    ),
 }
 
 TOOL_KEYS = list(SPECS)

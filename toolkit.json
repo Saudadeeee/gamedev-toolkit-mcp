@@ -129,6 +129,32 @@
       }
     },
 
+    "rfxgen": {
+      "origin": "first-party",
+      "runtime": "stdio",
+      "drives": "rfxgen",
+      "owns": "Retro SFX synthesis -- presets, parametric .rfx sound design, variations",
+      "license": "GPL-3.0-or-later",
+      "$comment": "Original code, no upstream -- unlike the other first-party servers there is no `repo`/`modified` here because there is nothing to diverge from. The rfxgen application it drives is zlib-licensed and not redistributed.",
+      "path": "servers/rfxgen",
+      "install": { "type": "uv-project" },
+      "client": {
+        "command": "uv",
+        "args": ["--directory", "{path}", "run", "-m", "rfxgen_mcp"],
+        "cwd": "{path}",
+        "env": { "RFXGEN_PATH": "{app:rfxgen}" }
+      },
+      "fallbackClient": {
+        "$comment": "Used when uv is not on PATH. cwd is what makes -m resolvable.",
+        "command": "python",
+        "args": ["-m", "rfxgen_mcp"],
+        "cwd": "{path}",
+        "env": { "RFXGEN_PATH": "{app:rfxgen}" }
+      },
+      "requiresApp": false,
+      "appSetup": "None -- the server spawns the rfxgen CLI per call. Needs the binary: RFXGEN_PATH or a standard install location."
+    },
+
     "audacity": {
       "origin": "vendored",
       "runtime": "stdio",

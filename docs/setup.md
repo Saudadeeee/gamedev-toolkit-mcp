@@ -17,13 +17,13 @@ Complete installation guide for `GameDev Toolkit MCP` on Windows, macOS, and Lin
 
 ## How the repo is arranged
 
-All five MCP servers live under [`servers/`](../servers/) and are tracked in git.
+All six MCP servers live under [`servers/`](../servers/) and are tracked in git.
 `toolkit.json` records an `origin` for each, which decides only who fixes its
 bugs and how an update arrives:
 
 | `origin` | Servers | Who fixes bugs |
 |---|---|---|
-| `first-party` | `aseprite`, `godot-mcp` | this repo |
+| `first-party` | `aseprite`, `godot-mcp`, `rfxgen` | this repo |
 | `vendored` | `audacity`, `obsidian`, `blockbench` | upstream — see [COPYRIGHT](../COPYRIGHT) |
 
 `blockbench` is vendored for licence compliance and reference, but it runs as a
@@ -62,7 +62,7 @@ The setup script:
 2. Installs the `aseprite` server's dependencies (`uv sync`).
 3. Builds `servers/godot/server/dist/index.js` (`npm run build`).
 4. Builds a virtualenv for each vendored server from the in-tree source.
-5. Writes `mcp_config.json` covering **all five** servers, with this machine's
+5. Writes `mcp_config.json` covering **all six** servers, with this machine's
    absolute paths and detected application paths filled in.
 
 `mcp_config.json` contains absolute local paths and API keys and is gitignored.
@@ -230,6 +230,7 @@ The `audacity` entry invokes the console script `audacity-mcp`, not
 | `godot-mcp` scene tools | **Yes** — editor open, `godot_mcp` plugin enabled | WebSocket on `9080` |
 | `godot-mcp` headless tools | **No** — drives the binary directly | none |
 | `blockbench` | **Yes** — app open with the MCP plugin loaded | HTTP, usually `3000` |
+| `rfxgen` | **No** — spawns the rfxgen CLI per call | `RFXGEN_PATH` if not auto-detected |
 | `audacity` | **Yes** — Audacity 3.x with `mod-script-pipe` | 4.x is unsupported upstream |
 | `obsidian` | **Yes** — app open with Local REST API | `OBSIDIAN_API_KEY` |
 

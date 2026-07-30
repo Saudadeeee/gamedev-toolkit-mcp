@@ -285,6 +285,10 @@ def check_suites(report: Report, quick: bool, apps: dict) -> None:
     ok, out = run(["uv", "run", "python", "-m", "pytest", "-q"], ASEPRITE_MCP, timeout=300)
     report.add("aseprite unit tests", OK if ok else BAD, out)
 
+    ok, out = run(["uv", "run", "python", "-m", "pytest", "-q"],
+                  ROOT / "servers" / "rfxgen", timeout=300)
+    report.add("rfxgen unit tests", OK if ok else BAD, out)
+
     ok, out = run(["npm", "run", "build"], GODOT_SERVER, timeout=600)
     report.add("godot-mcp TypeScript build", OK if ok else BAD, out if not ok else "tsc clean")
 
@@ -310,6 +314,13 @@ def check_suites(report: Report, quick: bool, apps: dict) -> None:
             report.add(label, OK if ok else BAD, out)
     else:
         report.add("aseprite smoke + shading", SKIP, "Aseprite not found")
+
+    if apps.get("rfxgen", {}).get("found"):
+        ok, out = run(["uv", "run", "tests/smoke_test.py", "--clean"],
+                      ROOT / "servers" / "rfxgen", timeout=600)
+        report.add("rfxgen smoke", OK if ok else BAD, out)
+    else:
+        report.add("rfxgen smoke", SKIP, "rfxgen not found; set RFXGEN_PATH")
 
     if apps.get("godot", {}).get("found"):
         demo = GODOT_SERVER / "tests" / "headless_test.mjs"

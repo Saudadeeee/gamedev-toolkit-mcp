@@ -62,7 +62,7 @@ requires-dist = [
     { name = "anyio", specifier = ">=4.0.0" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=24.0.0" },
     { name = "flake8", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "mcp", extras = ["cli"], specifier = ">=1.8.0" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.8.0,<2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
 ]

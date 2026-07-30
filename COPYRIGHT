@@ -52,6 +52,17 @@ servers/godot/                                        LICENSE: MIT
   LICENCE ASKS OF YOU, below.
 
 --------------------------------------------------------------------------------
+servers/rfxgen/                                       LICENSE: GPL-3.0 (project)
+--------------------------------------------------------------------------------
+  Copyright (c) 2026 Saudade
+  Original code, written for this toolkit; no upstream. The project licence
+  applies directly.
+
+  The rfxgen application it drives is Copyright (c) Ramon Santamaria
+  (@raysan5), zlib licence -- an external tool invoked through its CLI, not
+  redistributed here.
+
+--------------------------------------------------------------------------------
 servers/audacity/                                     LICENSE: Apache-2.0
 --------------------------------------------------------------------------------
   Copyright (c) xDarkzx and contributors
@@ -93,6 +104,7 @@ that statement.
 
   servers/aseprite/     MODIFIED -- extensively; a fork. See CREDITS.md.
   servers/godot/        MODIFIED -- extensively; a fork. See CREDITS.md.
+  servers/rfxgen/       ORIGINAL -- written here; no upstream to diverge from.
   servers/audacity/     UNMODIFIED -- vendored verbatim from upstream.
   servers/obsidian/     UNMODIFIED -- vendored verbatim from upstream.
   servers/blockbench/   UNMODIFIED -- vendored verbatim from upstream.
