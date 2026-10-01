@@ -16,7 +16,7 @@ dependencies = [
     # The <2 pin matters: this server imports mcp.server.fastmcp, which mcp
     # 2.0 removed. Same pin as every other Python server in this toolkit.
     "mcp[cli]>=1.28.1,<2",
-    "anyio>=4.0.0",
+    "anyio>=4.15.1",
 ]
 
 [project.optional-dependencies]
